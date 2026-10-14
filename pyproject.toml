@@ -1,0 +1,31 @@
+# Copyright (c) 2026 Tim Molteno (tim@elec.ac.nz)
+[project]
+name = "dde-cargo"
+version = "0.1.0"
+description = "Stimela cab definitions for DDFacet and killMS"
+authors = [
+    { name = "Tim Molteno", email = "tim@elec.ac.nz" }
+]
+license = { text = "GPLv3" }
+readme = "README.md"
+requires-python = ">=3.10,<3.14"
+dependencies = [
+    "stimela>=2.1.4",
+    # pyparsing 3.3.3 breaks stimela 2.1.4's scabha formula evaluator
+    # (documented in meerkat_imaging's pyproject.toml)
+    "pyparsing<3.3.3",
+]
+
+[dependency-groups]
+dev = ["pytest>=8.4.0", "pyyaml>=6.0"]
+# For the smoke check that the cabs load through stimela: ddfacet.yml's
+# `bdsf.catalog` entry is an image override for cult-cargo's cab, so the
+# pair must load together (same order as upstream's white-belt-4-ddfacet.yml)
+dev-smoke = ["cult-cargo==0.2.1"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["dde_cargo"]

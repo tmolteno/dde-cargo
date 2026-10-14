@@ -1,0 +1,331 @@
+# Copied verbatim from the installed package in killms:v3.6.12
+# (/opt/venv/lib/python3.13/site-packages/killMS/stimela/killms-memory-plan.yml).
+# stimela reads cabs from the host, so upstream's file has to live here.
+# stimela cab: killms-memory-plan
+#
+# Suggests --NCPU and the parameters that trade against it for a killMS solve,
+# from the solve's geometry and a memory budget.  This is the command-line form
+# of killMS/Other/ModEstimateMemory.py, and it ships with the package so a
+# recipe can list it directly:
+#
+#     - /opt/venv/lib/python3.13/site-packages/killMS/stimela/killms-memory-plan.yml
+#
+# or copy the cab into the recipe's own cabs/ directory.
+#
+# Wiring it into a recipe, ahead of the solve step:
+#
+#     killms-memory-plan:
+#         cab: killms-memory-plan
+#         params:
+#             MS: =recipe.target-ms
+#             NDir: =steps.<deconvolution>.Facets.NDir
+#             RamGB: 54
+#             WantNCPU: 6
+#     killms-target:
+#         params:
+#             NCPU: =steps.killms-memory-plan.NCPU
+#             TChunk: =steps.killms-memory-plan.TChunk      # an OUTPUT, so this works
+#             NChanSols: =steps.killms-memory-plan.NChanSols
+#
+# WHAT IT DOES AND DOES NOT KNOW
+#
+# A solve's memory is (a) the shared model grids DDFacet publishes in /dev/shm,
+# (b) the parent process peak, and (c) the worker peaks -- and only (c) responds
+# to NCPU.  The worker peak is a *measurement* from one dataset (6.4 GiB on a
+# worker's first task, up to 22.5 GiB later, at NDir=10 on mergA_tim); the array
+# arithmetic that ought to predict it comes out 25x low, so this tool does not
+# pretend to derive it.  Pass WorkerMiB from a real /proc/<pid>/status:VmHWM if
+# you have one, and GridGB from a prior run of the same DDF cache.
+#
+# It is therefore good for choosing between "NCPU 3" and "NCPU 8", and for
+# answering "does this fit on this machine at all" -- which is the question that
+# matters, since a solve that does not fit gets OOM-killed or swaps rather than
+# failing cleanly.  It is not accurate to the gigabyte, and it says so in its
+# own output.
+#
+# Exit status: 0 with a plan, 1 when nothing in the budget fits (with the
+# arithmetic printed), so a recipe can branch on it.
+#
+# IN-PROCESS SOLVER (killMS >= v3.9, `InProcess: true`, the default): the model
+# above was calibrated on the forked worker pool -- per-worker peaks of 6.4-22.5
+# GiB, because every worker mapped the shared model grids.  The solver now runs
+# as threads in one process and the model grids are heap in that process, so a
+# sweep of the same solve on moist (8 cores, uv1500 fast profile, target 1, 10
+# directions, NChanSols 20, after DDFacet's zero-flux-facet fix, 2026-09-27)
+# measured:
+#
+#     NCPU   wall   CPU    largest process   anon peak   cgroup peak
+#       2    5:30   155%       14.0 GB           --         15.8 GB
+#       4    5:34   203%       13.3 GB        13.1 GB       15.1 GB
+#       8    5:26   239%       13.5 GB        12.9 GB       15.2 GB
+#
+# Memory is flat in NCPU, so a thread costs next to nothing and the planner now
+# charges `WorkerMiB` 512 per thread (a margin, not a measurement of a slope --
+# there is none to measure) and no shared grids (they are inside ParentGB), and
+# returns every usable core.  Wall time is flat too: the solver threads are
+# serialised by the GIL, which the native kernels never release (killMS#26), so
+# more cores buy speed only once that is fixed -- handing them out now costs
+# nothing and is ready for it.  `InProcess: false` restores the pool model.
+#
+# RamGB and WantNCPU default to what the host offers when the step runs
+# (MemAvailable capped by a cgroup memory limit; the CPU affinity set).
+
+vars:
+  killms-memory-plan:
+    image:
+      registry: ghcr.io/tmolteno
+      name: killms
+      # Pin this to whatever the recipe's killMS step uses; a recipe with its
+      # own image var should override `image:` on the cab instead.
+      version: v3.15.3
+
+cabs:
+    killms-memory-plan:
+        info: |
+            Suggest --NCPU (and the parameters that trade against it) for a killMS
+            solve, from the solve geometry and a memory budget.  Reads the MS for
+            its row/channel/antenna counts when one is given; pass NRows/NChan/NA
+            instead when it cannot be read.  Prints the arithmetic, including how
+            sensitive the answer is to the per-worker peak, which is measured on
+            one dataset only.
+        image:
+            _use: vars.killms-memory-plan.image
+        inputs:
+            MS:
+                dtype: MS
+                required: false
+                info: measurement set to size the plan with
+            RamGB:
+                dtype: float
+                required: false
+                info: >
+                    memory the solve may use -- what is actually available
+                    (MemAvailable, or the container limit), not the machine's
+                    total.  Default: exactly that, read when the step runs
+            NDir:
+                dtype: int
+                default: 1
+                info: directions in the solve, from the NodesFile/ClusterCat
+            WantNCPU:
+                dtype: int
+                required: false
+                info: >
+                    worker count you would like; also the cap.  Default: the usable
+                    cores (the CPU affinity set)
+            InProcess:
+                dtype: bool
+                default: true
+                info: >
+                    the in-process solver (killMS >= v3.9): threads, with the model
+                    grids inside the parent, so no shared-grid term and a 512 MiB
+                    per-thread margin unless GridGB/WorkerMiB are given.  false = the
+                    forked pool the model was calibrated on
+            NRows:
+                dtype: float
+                required: false
+                info: >
+                    rows per antenna per time chunk, when no MS is given; the
+                    average, not the peak
+            NChan:
+                dtype: int
+                default: 1
+                info: channels per task (normally the MS channel count)
+            NA:
+                dtype: int
+                required: false
+                info: antenna count, when no MS is given
+            ObsHours:
+                dtype: float
+                required: false
+                info: observation length, to report how many chunks the solve runs as
+            GridGB:
+                dtype: float
+                required: false
+                info: >
+                    shared model grids in /dev/shm, if known (measured 37 GiB on
+                    mergA_tim).  The weakest number in the model; measure it from
+                    a prior run of the same DDF cache if you can
+            ParentGB:
+                dtype: float
+                required: false
+                info: parent process peak, if known (measured ~15-16 GiB on mergA_tim)
+            WorkerMiB:
+                dtype: float
+                required: false
+                info: >
+                    per-worker peak from a real VmHWM measurement; overrides the
+                    built-in 6500 MiB, which is the floor measured on mergA_tim
+            GridsAreDiskBacked:
+                dtype: bool
+                default: false
+                info: >
+                    the shared grids sit on a disk-backed directory bound over
+                    /dev/shm (how the meerkat pipeline runs), so they are page
+                    cache rather than RAM the budget must hold.  They are still
+                    reported, and still have to fit that directory
+            PlanOut:
+                dtype: File
+                default: killms-memory-plan.json
+                # the command *writes* this file, so stimela must not require it
+                # to exist before the step starts (the same declaration bug as
+                # DDFacet#17, and killMS#8's class)
+                must_exist: false
+                info: where to write the plan, as JSON
+        outputs:
+            NCPU:
+                dtype: int
+                info: pass to --NCPU
+            TChunk:
+                dtype: float
+                info: >
+                    pass to --TChunk (hours).  An *output*: the planner is given
+                    the observation length as ObsHours and suggests the chunking.
+                    It must not also be an input -- stimela rejects a name that
+                    appears in both, and that made this cab unloadable
+                    (killMS#8)
+            NChanSols:
+                dtype: int
+                info: pass to --NChanSols
+            PeakGB:
+                dtype: float
+                info: the model's predicted peak at those settings
+            Flags:
+                dtype: str
+                info: the flags, ready to paste
+            Plan:
+                dtype: File
+                must_exist: false
+                info: the JSON plan (chosen settings, notes, sensitivity table)
+            Fits:
+                dtype: bool
+                info: >
+                    false when nothing in the budget fits, in which case the step
+                    fails with the arithmetic rather than handing back a plan that
+                    cannot run
+        flavour:
+            kind: python-code
+        command: |
+            import json
+            from killMS.Other.ModEstimateMemory import (planFromMS,
+                                                        suggestParameters)
+
+            # Optional inputs may arrive unset, in which case stimela does not
+            # necessarily define the name at all -- look them up defensively.
+            _g = globals()
+
+
+            def _opt(name, default=None):
+                value = _g.get(name, default)
+                return default if value is None else value
+
+
+            import os
+
+
+            def _usable_cores():
+                try:
+                    return len(os.sched_getaffinity(0))
+                except AttributeError:
+                    return os.cpu_count() or 1
+
+
+            def _available_gb():
+                """MemAvailable, capped by the cgroup (v2) limit: what this solve can use."""
+                avail = None
+                with open("/proc/meminfo") as _fh:
+                    for _line in _fh:
+                        if _line.startswith("MemAvailable:"):
+                            avail = int(_line.split()[1]) * 1024
+                try:
+                    _cg = open("/proc/self/cgroup").read().strip().split("::", 1)[-1]
+                    _dir = "/sys/fs/cgroup" + _cg
+                    _max = open(_dir + "/memory.max").read().strip()
+                    if _max != "max":
+                        _free = int(_max) - int(open(_dir + "/memory.current").read())
+                        avail = _free if avail is None else min(avail, _free)
+                except (OSError, ValueError):
+                    pass
+                return avail / float(1 << 30)
+
+
+            RamGB = _opt("RamGB")
+            _ram_source = "RamGB"
+            if RamGB is None:
+                RamGB = _available_gb()
+                _ram_source = "available on this host"
+            _cores = int(_opt("WantNCPU") or _usable_cores())
+            _inprocess = bool(_opt("InProcess", True))
+            # In-process: the model grids are heap inside the parent (ParentGB), and a
+            # solver thread costs next to nothing (measured flat, header), so no grid
+            # term and a 512 MiB per-thread margin unless the caller measured better.
+            _grid_gb = _opt("GridGB")
+            _worker_mib = _opt("WorkerMiB")
+            if _inprocess:
+                _grid_gb = 0.0 if _grid_gb is None else _grid_gb
+                _worker_mib = 512.0 if _worker_mib is None else _worker_mib
+            print("budget %.1f GB (%s); %d core(s)%s; %s solver model"
+                  % (RamGB, _ram_source, _cores,
+                     "" if _opt("WantNCPU") else " usable",
+                     "in-process (threads)" if _inprocess else "forked-pool"))
+            _kw = dict(ndir=int(_opt("NDir", 1)), ram_gb=float(RamGB),
+                       want_ncpu=_cores,
+                       grid_gb=_grid_gb,
+                       parent_gb=_opt("ParentGB"),
+                       worker_mib=_worker_mib,
+                       grids_are_disk_backed=bool(_opt("GridsAreDiskBacked", False)))
+            if _opt("MS"):
+                try:
+                    suggestion = planFromMS(_opt("MS"), **_kw)
+                except ValueError as _exc:
+                    suggestion, _why = None, str(_exc)
+            else:
+                try:
+                    suggestion = suggestParameters(
+                        nrows=_opt("NRows"), nchan=int(_opt("NChan", 1)),
+                        na=_opt("NA"), obs_hours=_opt("ObsHours"), **_kw)
+                except ValueError as _exc:
+                    suggestion, _why = None, str(_exc)
+
+            Plan = _opt("PlanOut", "killms-memory-plan.json")
+
+            if suggestion is None:
+                # "nothing fits" is an answer, not a crash: write it down, set
+                # every output to something defined, and fail with the
+                # arithmetic rather than a traceback.  Exiting 1 here means a
+                # recipe fails loudly instead of being handed an NCPU that
+                # cannot run.
+                Fits = False
+                NCPU = 1
+                TChunk = 0.5
+                NChanSols = int(_opt("NChanSols") or 20)
+                PeakGB = 0.0
+                Flags = ""
+                with open(Plan, "w") as _fh:
+                    json.dump(dict(fits=False, reason=_why), _fh, indent=2)
+                print("killMS memory plan: nothing fits this budget.")
+                print("  %s" % _why)
+                print("  plan written to %s" % Plan)
+                raise RuntimeError(
+                    "killms-memory-plan: no plan fits %.1f GB -- %s"
+                    % (float(RamGB), _why))
+
+            if _inprocess:
+                # the sensitivity table sweeps the forked pool's 6.5-23 GiB per-worker
+                # peaks, which say nothing about a solver thread (header)
+                suggestion.notes = [n for n in suggestion.notes
+                                    if not n.startswith("NCPU is sensitive to the per-worker peak")]
+            print(suggestion)
+            NCPU = int(suggestion.best["ncpu"])
+            TChunk = float(suggestion.best["tchunk"])
+            NChanSols = int(suggestion.best["nchansols"])
+            PeakGB = float(suggestion.best["peak_gb"])
+            Flags = suggestion.flags
+            Fits = True
+            with open(Plan, "w") as _fh:
+                json.dump(dict(fits=True, best=suggestion.best, flags=Flags,
+                               notes=suggestion.notes,
+                               feasible=suggestion.feasible,
+                               budget_gb=suggestion.budget_gb,
+                               grid_gb=suggestion.grid_gb,
+                               worker_gb=suggestion.worker_gb,
+                               parent_gb=suggestion.parent_gb), _fh, indent=2)

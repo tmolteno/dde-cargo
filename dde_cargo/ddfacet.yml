@@ -1,0 +1,881 @@
+vars:
+    tim-molteno:
+        images:
+            registry: ghcr.io
+            # >= 0.8.1.4 for the memory work stage 4 relies on (the row-blocked
+            # imaging-weights pass and --Parallel-MemWatermarkGB); >= 0.9.0.0 for
+            # the chunk-dict lifetime fix (DDFacet#5); 0.10.0.0 is the Debian 13 /
+            # Python 3.13 / NumPy 2.5.3 image the numpy-2 port needs (DDFacet#8)
+            # and it declares pyproj (DDFacet#7).  0.10.0.2 carries the three
+            # facet-setup fixes without which 0.10.0.0 could image nothing
+            # (DDFacet#9: ModCoord.lm2radec and the tessel label; DDFacet#10:
+            # MS.iMS), plus a SkyModel import-cycle fix.
+            # v0.10.0.3 gives the pool the named-pool API its merged call sites
+            # use (DDFacet#11/#14), makes a failed job reach the parent instead of
+            # leaving Bulba spinning (DDFacet#12) and fixes ClusterCat.Save() under
+            # numpy 2 (DDFacet#13); v0.10.0.4 additionally accepts DDFacet's own
+            # ragged CF lists in the Rust gridder, without which the *second* 3GC
+            # iteration dies in every PSF grid job (DDFacet#15) -- a compiled fix,
+            # so no /tmp overlay can substitute for the image.
+            # cabs/ddfacet_stimela_inputs_schema.yml is regenerated from this
+            # release with DDFacet/Parset/generate_stimela_schema.py -- the parset
+            # is unchanged since 0.10.0.0, so that file is byte-identical.
+            # v0.10.0.6 ships the memory planner (cab + module) inside the image, so the
+            # vendored copy under tools/memory-plan/ is gone; it also carries the
+            # planner's two-metric output and the #17 PlanOut fix.  The
+            # DataCorrelationFormat guard that would refuse a None correlation format
+            # at construction is on master, after this tag (DDFacet's note).
+            # v0.10.0.7's guard was not array-safe and broke *every* imaging run
+            # (DDFacet#18); v0.10.0.8 fixes it.  v0.10.0.9 is v0.10.0.8 plus the
+            # diagnostics this week's diagnosis asked for: the (de)gridder's four
+            # converted attributes are converted ahead of the call, one at a time,
+            # naming the attribute and its value, and an AttributeError from inside
+            # the call reports the six attributes it was handed.  Those messages are
+            # what named the correlation/Stokes values as *valid* and sent the search
+            # to the Rust backend's force_array -- behaviour is otherwise unchanged,
+            # so both the imaging and the solve steps move to it together.
+            #
+            # v0.10.0.12 is the week's own fixes: the boundary type check that makes
+            # the DDFacet<->killMS interface testable (#19), a named refusal on the
+            # antenna-0 re-referencing step that has been switched off since 2016
+            # (#21), and the Python-3 IO sweep -- a region file written as str to a
+            # file opened "wb", two Python-2 file() uses, a catalogue reader that kept
+            # only the last source of any catalogue, and an FFT entry calling an
+            # attribute no class defines (#23).  None of them changes a number on the
+            # pipeline's path, which is what the promotion measurement below found.
+            #
+            # Promoted on the ctl-calibrated comparison, 2026-09-18: three fast-profile
+            # legs, parset byte-identical, dirty.fits and dirty.corr.fits within
+            # 1 float32 ULP (rel 1.13e-7 / 6.8e-8 -- the same figures the
+            # identical-configuration control gives), app.restored/DicoModel
+            # differences no larger than the flag-on/flag-off pair or that control.
+            # At this pipeline's own reproducibility the release is indistinguishable
+            # from the pin it replaces; AGENTS.md section 4 records why that, and not
+            # exact identity, is the achievable bar.
+            #
+            # v0.10.0.15, promoted 2026-09-19 on the same rule.  It is the first image
+            # since v0.10.0.12 that can run the pipeline at all: v0.10.0.13 and
+            # v0.10.0.14 both raised `NameError: name 'six' is not defined` in
+            # DDF.py's driver(), because 8baa0fa8 removed the import and left the read.
+            # Fixed by deleting the dead Python-2 branch (its own commit, b9746bbd).
+            #
+            # The measurement: one fast-profile leg on the clean .15 image, no flags and
+            # no source binds, rc=0, 922 s -- `Degridding path: per-facet fan-out
+            # (DDFACET_DEGRID_BATCH unset)`, 2016 degrid jobs, no failures.  Against the
+            # accepted v0.10.0.12 products: parset byte-identical on both targets,
+            # dirty.corr rel 4.53e-08 / 2.24e-07, dirty rel 1.99e-08 / 7.0e-08 -- at the
+            # float32 noise floor; DicoModel sizes differ (224806/224810 and
+            # 142045/279972), which is the reproducibility marker and not a criterion,
+            # and app.restored.fits follows the clean model (reported, not gated).
+            #
+            # The batched degridder was NOT part of the .15 promotion: its own gate was
+            # open (the .15 image contains the caller defect Gate 3 found on .14,
+            # `KeyError: 'Sphe'`, fixed on master as 762cb414 and released in .16).
+            #
+            # v0.10.0.17, promoted 2026-09-19 on the same rule, and this one run settles
+            # two questions because the legs are ordered base -> off -> on:
+            #
+            #   * base vs off (the default path, which is what a pin is): both legs rc=0,
+            #     974 s, `Degridding path: per-facet fan-out (DDFACET_DEGRID_BATCH unset)`,
+            #     2016 degrid jobs, no failures.  parset byte-identical; dirty.corr rel
+            #     5.66e-08 / 2.24e-07 and dirty rel 5.63e-08 / 7.0e-08, at the float32
+            #     noise floor.  This pair also settles the thread-budget change in .17
+            #     (`RAYON_NUM_THREADS` now defaulted from `Parallel.NCPU`): the default
+            #     path is unperturbed.
+            #   * off vs on (the batched degridder, #22 phase 1b): both legs rc=0; the log
+            #     shows `Degridding path: pyDeGridderBatch, one job per chunk on rayon
+            #     threads` with 7 jobs per direction -- one per chunk -- against 2016 on
+            #     the fan-out.  parset byte-identical; dirty/dirty.corr worst rel 1.8e-07
+            #     against a release-to-release floor of 2.24e-07, i.e. **0.80x the floor**:
+            #     the batch is another legal accumulation order, measured on a product.
+            #
+            # The batch is verified but NOT enabled: `DDFACET_DEGRID_BATCH` stays unset on
+            # every leg.  The reason is in the same run -- the flag-on leg took 1435 s
+            # against 974 s, a 47% wall-time increase.  Collapsing 2016 pool jobs to 14 is
+            # a memory and fragility win, not a speed one, and enabling the flag by
+            # default needs that trade decided explicitly (and the memory numbers quoted
+            # from NpShared's own reporting) rather than inferred from this gate.
+            #
+            # v0.12.0 (2026-09-24) is the DDFacet#25 close-out: census 25 -> 11, every
+            # reached fan-out in-process, the imaging line shared-memory-free (the
+            # CF/Grid/VisWeights/BDA segments are heap).  v0.12.1 (2026-09-25) is the
+            # one-line mem-watermark throttle fix (%d -> %s): under the bigger
+            # uv2500/ovs4.5 image (free RAM under the 10 GB floor) the throttle killed
+            # a worker per hit instead of pausing, and the run aborted SIGABRT.
+            # v0.13.0 (2026-09-26) is the DDFacet#31 SSD3 port: all nine island-init
+            # fan-outs in-process (census 9/9) and --Deconv-Mode SSD3 deconvolving end
+            # to end, gated on the 76-island tiny-mask leg (76/76 fitted, 0 tracebacks,
+            # rc=0).  The island HMP work is GIL-bound, so it is ~1.35x the process
+            # pool's wall time on that leg -- the trade is the process/shared-memory
+            # cleanup, not throughput (RAYON.md).
+            # v0.13.1 (2026-09-27) is a patch: set_model_grid keeps no grid for a
+            # zero-flux facet (killMS#30 -- the killMS solve's model grids 17.5 -> 4.3 GB
+            # on the uv1500 fast profile, so it fits in ~16 GB), the row-semaphore
+            # EINTR/lifetime fixes (#36), MakeModel on numpy 2 (#34) and
+            # ClassJonesDomains without killMS (#35); imaging products unchanged.
+            # killMS is rebuilt on it as v3.10.4 -- keep the two pins moving together
+            # (AGENTS.md §2).
+            # v0.14.0 (2026-09-28) exports the degridder as a C-ABI capsule
+            # (_ddfacet_gridder.degrid_capi) for killMS's GIL-free model kernel
+            # (killMS#26 stage 6); imaging products unchanged.  killMS v3.11.0 is built
+            # on it.
+            # v0.14.1 (2026-09-28) is a patch: the memory watermark can no longer
+            # deadlock the pool (DDFacet#39), the degrid batch no longer skips a task
+            # after a parse failure and holds no aliased &mut (#37), lossy input casts
+            # are refused (#38), and a tag runs the fast suite before publishing (#27).
+            # killMS v3.11.1 is built on it.
+            # v0.15.0 (2026-10-01): --Facets-CatCentres (facets from given centres -- auto_facet),
+            # the EveryBeam LOFAR beam fix (DDFacet#41), python-casacore 3.7.1 from Debian on amd64.
+            # Default-path products bit-identical to v0.14.1 (SSD dirty/Norm, amd64).  killMS v3.12.0.
+            # v0.15.1 (2026-10-01): EveryBeam re-references the array factor only when it carries the
+            # station geometry (LBA yes, HBA no; DDFacet#41) -- both upstream acceptance cases pass vs
+            # 0.6.0.0; and the watermark test flake (#42).  FITS beam (MeerKAT) path unchanged.  killMS v3.12.1.
+            # v0.15.2 (2026-10-02): EveryBeam loads in the image on both arches (data dir, missing
+            # LOFAR_TILE_BEAM_DIR; arm64 now has everybeam) and its element mode no longer applies the array
+            # factor twice (DDFacet#41); PyBDSF built from upstream with the numpy-2 np.cross fix (#40) so
+            # bdsf.catalog runs on arm64 without a bind; a failed batch task's reason reaches the exception
+            # (#22); SSD3 --Posterior wired (#32, not run end to end).  Default path (MeerKAT FITS beam) unchanged.
+            # killMS v3.13.0.
+            version: v0.16.1
+
+cabs:
+    # The PyBDSF catalogue step runs in the pinned DDFacet image on every host (cult-cargo's
+    # quay.io/stimela2/bdsf is amd64-only; the DDFacet venv carries a source-built PyBDSF for
+    # both arches -- carried over from the dissolved arm64 wrappers, meerkat_imaging#9/#11).
+    bdsf.catalog:
+        image:
+            _use: vars.tim-molteno.images
+            name: tmolteno/ddfacet
+
+    ddfacet:
+        name: ddfacet
+        image:
+            _use: vars.tim-molteno.images
+            name: tmolteno/ddfacet
+        command: DDF.py
+        policies:
+            prefix: '--'
+            # pass True options as ..option True
+            explicit_true: 1
+            # pass False options as ..option False
+            explicit_false: 0
+            replace:
+                '.': '-'
+        inputs:
+            parset:
+                dtype: File
+                required: false
+                info: "Name of parset to load parameters from (default is to start with global default settings.)"
+                policies:
+                    positional_head: true
+            _include: ddfacet_stimela_inputs_schema.yml
+
+        outputs:
+            parset_out:
+                dtype: File
+                must_exist: false
+                implicit: '{current.Output.Name}.parset'
+            dirty_mfs:
+                dtype: File
+                must_exist: false
+                implicit: '{current.Output.Name}.dirty.fits'
+            dirty_corr_mfs:
+                dtype: File
+                must_exist: false
+                implicit: '{current.Output.Name}.dirty.corr.fits'
+            app_restored_mfs:
+                dtype: File
+                must_exist: false
+                implicit: '{current.Output.Name}.app.restored.fits'
+            # The intrinsic (primary-beam-corrected) restored image, in Jy/beam like the
+            # apparent one (DDFacet writes it when `I` is in `--Output-Images`, which the
+            # base step already asks for).  The catalogue that seeds the DD direction
+            # clustering must be built from THIS one, not `app_restored_mfs`: the
+            # directions carry the *intrinsic* model flux, so clustering on apparent flux
+            # balances a beam-attenuated quantity (see the handover note and DDFacet#33).
+            int_restored_mfs:
+                dtype: File
+                must_exist: false
+                implicit: '{current.Output.Name}.int.restored.fits'
+            skymodel:
+                dtype: File
+                must_exist: false
+                implicit: '{current.Output.Name}.DicoModel'
+
+
+    killms:
+        image:
+            _use: vars.tim-molteno.images
+            name: tmolteno/killms
+            # v3.6.0 could not solve at all and v3.6.2 inherits the pre-named-pool
+            # DDFacet, so the beam estimate raised before any solver work (killMS#3,
+            # killMS#4).  v3.6.3 reached the beam path but died in InitMeanBeam
+            # because ClassMS never provided PointingRadec, which DDFacet's beam
+            # machines read (killMS#5) -- fixed in v3.6.4, which also adds
+            # TestHarness/TestBeamMSContract.py.  v3.6.5 is v3.6.4 rebased onto
+            # ghcr.io/tmolteno/ddfacet:v0.10.0.4, the release that carries the Rust
+            # gridder fix for per-plane CF supports (DDFacet#15), so the whole 3GC
+            # chain runs on one DDFacet version.  The solve uses this image, not the
+            # ddfacet one above: the two pins are independent per container.
+            # v3.6.8 fixed the removed degridder mode that killed every solve here
+            # (RIME.ForwardMode "Classic" in kMS.py), v3.6.9 the CHAN_FREQ read that
+            # broke the memory planner's --MS path, and v3.6.10/v3.6.11 the two cab
+            # declaration bugs found while wiring that planner in (killMS#7, #8).
+            # v3.6.12 fixes the degridder argument that killed the v3.6.11 run
+            # (killMS#10: DataCorrelationFormat / AvailableCorrelationProductsIds);
+            # before it, v3.6.8 fixed the removed degridder mode (#6), v3.6.9 the
+            # planner's CHAN_FREQ read (#7) and v3.6.10/11 the two cab declarations
+            # (#8).  Triple in the image: killMS 3.6.12 | DDFacet 0.10.0.4 | numpy 2.5.3.
+            # v3.6.14 is a *diagnostic* release for killMS#10: it reports where the
+            # DataCorrelationFormat=None came from (use pid vs built_by_pid).  v3.6.13
+            # added their inbox tooling; v3.6.12's attempted fix did not hold.
+            # v3.6.17 fixes the diagnostic that v3.6.14/v3.6.16 crashed on (`if fmt:`
+            # on a NumPy array), so the DataCorrelationFormat pid question can finally
+            # be answered, or the solve can get past GridMachine.get entirely.
+            # v3.6.19 accepts the two-polarisation layout this dataset actually has
+            # ([9,12] = XX,YY) by testing membership of a basis rather than equality
+            # with the full four-pol layout (killMS#12).  Base is ddfacet v0.10.0.7,
+            # so the image carries all three correlation-format checks at once.
+            # v3.6.21 is the first killMS image on an array-safe DDFacet (v0.10.0.8):
+            # the guard that stopped the v3.6.19 solve 21 s in now accepts the array
+            # ClassFacetMachine passes it while still refusing an empty layout.
+            # Imaging stays on ddfacet v0.10.0.6, which predates the guard entirely.
+            # v3.6.22 resolves ExpectedOutputStokes explicitly -- v3.6.21 passed
+            # SM.RequiredStokesProductsIds straight through, unchecked, and the
+            # degridder converts exactly two attributes (that one and the
+            # correlation layout), so it was the half no guard covered; a None there
+            # now raises in killMS naming the attribute.  It embeds ddfacet
+            # v0.10.0.8, so the solve keeps the array-safe DDFacet v3.6.21 gave it.
+            # v3.6.23 (untagged) moves both diagnostics into the exception, because
+            # a worker's stdout does not reach the log; the interim run binds that
+            # one file over this image rather than waiting for the tag.
+            # v3.6.24 fixes five latent NameErrors in kMS.py on paths nothing
+            # reaches (and corrects its own astype claims, from the numpy check
+            # this workspace ran in its image).  killMS#10's real fix -- the BDA
+            # degrid block map, built from VS.SolsToVisChanMapping and set on the
+            # machine before the degrid call, where None used to reach the Rust
+            # backend's force_array -- is commit a7bebcf, untagged here, so the
+            # stage-4 run binds that one file over this image.
+            # v3.7.0 is the release of the whole untagged week, and it is why the
+            # one-file binds come out: "the solve runs end to end, verified on real
+            # data; CorrVis ported to killms-core".  It carries killMS#16 (the
+            # gathered-copy model that made every solve the identity, f533e9c),
+            # #17 (the serial path's NameError, c11ea86), #10's degrid map
+            # (a7bebcf/410cb56), the narrowed-buffer pair (273d38b, 3a1b183) and
+            # the "a solve that optimises nothing must not look like one that did"
+            # counters (ee31c25) -- plus the Rust CorrVis/killms-core work
+            # (d98c3dc, f634564), which is *compiled*, so no /tmp overlay could
+            # ever have carried it.  v3.6.24 predates all of it.
+            # v3.7.1 is v3.7.0 plus the #18 Stats-copy fix (the -1 "nothing
+            # solved" marker now survives normalisation) and the CI work that
+            # followed: the 187-test suite now runs inside the image
+            # (4015b8e/7059ace/ca273b1), the degrid smoke handed over by this
+            # workspace runs there (42ab7c4, with the fixture fix it needed), and
+            # the Dockerfile no longer tries to run it where /dev/shm is 64 MB
+            # (0838081).  killMS#22's exact-degrid-map switch (959095a) is *not*
+            # in it -- it is master-only, untagged, which is why the A/B binds
+            # that one file over this image rather than waiting for a release.
+            # v3.8.0 ships that switch, default on: the degrid map is one block per
+            # row -- the model for each baseline's own uv -- which is the fix for the
+            # week's noise-like gains (killMS#22) and for the ~90 deg phase scatter
+            # reported in killMS#19.  v3.8.1 is v3.8.0 with pyproject bumped, because
+            # the tag-triggered workflow is the only publish path and v3.8.0 had
+            # shipped as 3.7.1 (killMS#23); the solve path is tree-identical
+            # (`killMS/`, `TestHarness/`, `tests/` are the same git objects at both
+            # tags).  The release acceptance ran on the tag-built v3.8.0 image with
+            # no binds and no KILLMS_* variable and passed every pre-registered
+            # criterion -- exact-map banner on both targets, median |phi| 0.039 rad
+            # (from 1.521), median |g| 1.068 (from 0.55), corrected-image peak ratio
+            # 1.0016 / sum 1.0695 / rms 1.0677 -- so this pin moves for the version
+            # string, not for a different solver.
+            # v3.10.0 (2026-09-24) is the same solver REBUILT on the ddfacet v0.12.0
+            # base (the #25 close-out); v3.10.1 (2026-09-25) rebases it on ddfacet
+            # v0.12.1 (the mem-watermark throttle fix); v3.10.2 (2026-09-25) makes the
+            # predict consume the CF as the in-process dict the rayon DDFacet keeps
+            # (_CF.path is gone; exposed by the first ever solve on v0.12.x, the
+            # uv2500/ovs4.5 run); v3.10.3 (2026-09-26) rebases on ddfacet v0.13.0 (the
+            # SSD3 port) and folds in the predict in-process cleanup (the dead
+            # multiprocessing Worker gridding class removed); v3.10.4 (2026-09-27)
+            # rebases on ddfacet v0.13.1 and adds the other half of killMS#30 (no grid
+            # machine for a zero-flux facet) and killMS#25 (a failed solver task fails
+            # at once instead of after the 1800 s stall timeout).  killMS's Dockerfile
+            # `FROM`s the ddfacet tag, so this version moves whenever the ddfacet pin
+            # above does (AGENTS §2).
+            # v3.11.0 (2026-09-28) rebases on ddfacet v0.14.0.  It fixes killMS#32 (the
+            # solver threads raced on the degrid machines), #33 (the kernel cache reused
+            # an earlier interval's model), #31 and #29.  SOLUTIONS CHANGE: re-solve
+            # before quoting DD results from v3.9.0-v3.10.4.  It also carries the
+            # whole-task Rust port, stages 0-6 (fast profile NCPU 8: 6:04 -> 2:19,
+            # solutions bit-identical to the Python paths and across NCPU).
+            # v3.11.1 (2026-09-28) rebases on ddfacet v0.14.1.  The covariance weights
+            # run in-process on threads, not forked processes (killMS#28), and two more
+            # GIL cuts bring the fast profile's NCPU 8 solve to 2:02 (solutions
+            # unchanged).
+            # v3.11.2 (2026-09-30) degrids the model one block per row per CHANNEL
+            # (killMS#34): the per-band blocks mis-phased every source off its facet
+            # centre on long baselines and the solve absorbed that model error.
+            # SOLUTIONS CHANGE: real-profile t1 DD/DI far-field 1.494 -> 0.892.
+            # v3.11.3 (2026-10-01): CohJones solves again (killMS#35 -- the in-process pool
+            # read KAFCA's covariances); KAFCA, which this pipeline runs, is unchanged.
+            # v3.12.0 (2026-10-01): --FacetCentres (the solve tessellates as corrected-ddfacet's
+            # Facets.CatCentres), rebuilt on ddfacet v0.15.0.
+            # v3.12.1 (2026-10-01): rebuilt on ddfacet v0.15.1 (no killMS code change).
+            # v3.13.0 (2026-10-02): --BeamModel LOFAR is EveryBeam, the same code DDFacet images with
+            # (killMS#36; was a ModuleNotFoundError on the retired lofar module); rebuilt on ddfacet v0.15.2.
+            # The FITS beam (MeerKAT) path is unchanged.
+            version: v3.15.3
+        command: kMS.py
+        policies:
+            # pass True options as ..option 1
+            explicit_true: 1
+            # pass False options as ..option 0
+            explicit_false: 0
+        inputs:
+            parset:
+                dtype: File
+                required: false
+                info: "Name of parset to load parameters from (default is to start with global default settings.)"
+                policies:
+                    positional_head: true
+
+            _include: killms_stimela_schema.yml
+
+        outputs:
+            parset_out:
+                dtype: File
+                must_exist: true
+                implicit: '{current.BaseImageName}.parset'
+
+
+    ddf_makemodel:
+        image:
+            _use: vars.tim-molteno.images
+            name: tmolteno/ddfacet
+        command: MakeModel.py
+        inputs:
+            ds9PreClusterFile:
+                dtype: File
+                required: true
+            BaseImageName:
+                dtype: str
+                required: true
+            NCluster:
+                dtype: int
+                default: 0
+        outputs:
+            ClusterCat:
+                implicit: '{current.ds9PreClusterFile}.ClusterCat.npy'
+
+
+    ddf_makemask:   #MakeMask.py --RestoredIm image_DI_Clustered.app.restored.fits --Th 5
+        image:
+            _use: vars.tim-molteno.images
+            name: tmolteno/ddfacet
+        command: MakeMask.py
+        inputs:
+            RestoredIm:
+                dtype: File
+                required: true
+            Th:
+                dtype: float
+                required: true
+        outputs:
+            OutputMask:
+                implicit: '{current.RestoredIm}.mask.fits'
+
+
+    dilatemask:
+        info: |
+            Dilate an external deconvolution mask by a given number of beams around every island
+            (binary dilation -- orientation-agnostic, so no mask pixel convention is involved).
+            The recorded stage-4 external mask is measurably too tight: on the auto run
+            (PEEL_PLAN_2.md §11) dilating it by 30 beams improved the far-field DD/DI rms
+            0.911 -> 0.869 and the bright-source box residual 4x (-121 -> -30 sigma) with no
+            negative bowl, while deeper cleaning inside the recorded mask changed nothing.
+            The beam comes from RestoredIm's BMAJ, the pixel scale from the mask's CDELT2
+            (same grid -- the mask is made from that image).
+        image:
+            _use: vars.tim-molteno.images
+            name: tmolteno/ddfacet
+        inputs:
+            Mask:
+                dtype: File
+                required: true
+                info: the external mask to dilate (ddf_makemask's OutputMask)
+            RestoredIm:
+                dtype: File
+                required: true
+                info: the image the mask was made from (for BMAJ)
+            DilateBeams:
+                dtype: float
+                default: 30.0
+                info: dilation radius in synthesised beams
+        outputs:
+            DilatedMask:
+                dtype: File
+                implicit: '{current.Mask}.dilated.fits'
+                must_exist: true
+        flavour:
+            kind: python-code
+        command: |
+            import numpy as np
+            from astropy.io import fits
+            from scipy.ndimage import binary_dilation
+            # python-code cabs do not inject implicit outputs as variables: derive
+            # the name here, matching the DilatedMask implicit exactly
+            DilatedMask = "%s.dilated.fits" % Mask
+            mh = fits.getheader(Mask)
+            mdata = fits.getdata(Mask)
+            m = np.squeeze(mdata).astype(bool)
+            bh = fits.getheader(RestoredIm)
+            bpx = abs(bh["BMAJ"] / mh["CDELT2"])
+            r = int(round(DilateBeams * bpx))
+            yy, xx = np.mgrid[-r:r + 1, -r:r + 1]
+            disk = (yy ** 2 + xx ** 2) <= r * r
+            dil = binary_dilation(m, structure=disk)
+            out = np.broadcast_to(dil.astype(mdata.dtype), mdata.shape).copy()
+            fits.PrimaryHDU(data=out, header=mh).writeto(DilatedMask, overwrite=True)
+            print("dilatemask: +%s beams = %d px radius -> %d -> %d px" % (DilateBeams, r, m.sum(), dil.sum()))
+
+
+    clustercat:
+        image:
+            _use: vars.tim-molteno.images
+            name: tmolteno/ddfacet
+        command: ClusterCat.py
+        inputs:
+            SourceCat:
+                dtype: File
+                required: true
+            NGen:
+                dtype: int
+                default: 100
+            NCluster:
+                dtype: int
+                required: true
+            CentralRadius:
+                dtype: float
+                default: 0.0
+            FluxMin:
+                dtype: float
+                default: 0.000001
+            NCPU:
+                dtype: int
+                default: 1
+            DoPlot:
+                dtype: int
+                default: 0
+        outputs:
+            OutClusterCat:
+                dtype: File
+                must_exist: false
+                required: true
+
+
+    ddfacet-get-npix:
+        info: Find out the value of NPIX to pass into DDFacet.
+        image:
+            _use: vars.tim-molteno.images
+            name: tmolteno/ddfacet
+        inputs:
+            NPixIn:
+                dtype: int
+                required: true
+            Padding:
+                dtype: int
+                required: true
+        outputs:
+            NPixOut:
+                dtype: int
+                info: The value of NPIX that you should use for DDFacet.
+        flavour:
+            kind: python-code
+        command: |
+            from DDFacet.ToolsDir.ModToolBox import EstimateNpix
+            npixels = EstimateNpix(NPixIn, Padding)
+            print(f"DDFacet NPix = {npixels}")
+            NPixOut = int(npixels[0])
+
+
+    modelcat:
+        info: |
+            Replace a BDSF catalogue's fluxes with the MODEL flux around each
+            source -- i.e. with the flux the DD directions will actually carry.
+
+            The direction clustering balances "flux per direction" against the
+            catalogue it is handed, but what the directions carry is the model's
+            flux (killMS accumulates each facet's model flux per direction,
+            Predict/ClassImageSM2.py:322-328).  A restored-image catalogue does not
+            match that, in any scale: measured on the uv2500/ovs4.5 run, clustering
+            on the apparent catalogue left one direction carrying 33% of the model
+            (1.77 Jy) while sitting 43 arcmin from it, and rescaling that catalogue
+            to intrinsic flux (the beam correction) did not help.  Weighting by the
+            model flux does: carried-flux spread std/mean 0.83 -> 0.70, the starved
+            direction disappears, and each direction lands a median ~1.7 arcmin from
+            its brightest source (was ~7.5).
+
+            Uses the *intrinsic* first-pass model (`{prefix}.int.model.fits`, the
+            direction-summed one) so the weights are in the same units as the model
+            the solve builds, and the sources with no model flux get flux 0 -- the
+            clustering step's own `FluxMin` then drops them, which is what puts the
+            nodes on the modelled flux rather than on detections the model never
+            contained.  See DDFacet#33.
+        image:
+            _use: vars.tim-molteno.images
+            name: tmolteno/ddfacet
+        inputs:
+            SrlIn:
+                dtype: File
+                required: true
+                info: A BDSF source list (`*.srl`) from the first-pass image.
+            ModelImage:
+                dtype: File
+                required: true
+                info: |
+                    DDFacet's `{prefix}.int.model.fits` for the same pass -- the
+                    intrinsic (beam-corrected), direction-summed model.
+            RadiusPix:
+                dtype: int
+                default: 8
+                info: Half-box (pixels) around each source over which the model flux is summed.
+        outputs:
+            SrlOut:
+                dtype: File
+                must_exist: false
+                required: true
+                info: The catalogue with `Total_flux` set to the model flux (0 where the model has none).
+        flavour:
+            kind: python-code
+        command: |
+            import numpy as np
+            from astropy.io import fits
+            from astropy.wcs import WCS
+
+            with fits.open(ModelImage, memmap=True) as h:
+                mod = np.asarray(h[0].data, dtype=np.float64)
+                while mod.ndim > 2:
+                    mod = mod[0]
+                wcs = WCS(h[0].header).celestial
+
+            with fits.open(SrlIn) as h:
+                hdul = fits.HDUList([x.copy() for x in h])
+            tab = hdul[1]
+            data = tab.data.copy()
+            names = data.names
+
+            # At the source PEAK position (inside the image); fall back to the centroid.
+            ra = np.asarray(data["RA_max"] if "RA_max" in names else data["RA"], float)
+            dec = np.asarray(data["DEC_max"] if "DEC_max" in names else data["DEC"], float)
+            xw, yw = wcs.all_world2pix(ra, dec, 0)
+            xi = np.rint(np.atleast_1d(xw)).astype(int)
+            yi = np.rint(np.atleast_1d(yw)).astype(int)
+
+            r = int(RadiusPix)
+            mflux = np.zeros(ra.size, dtype=np.float64)
+            ny, nx = mod.shape
+            for i in range(ra.size):
+                x0, x1 = max(0, xi[i] - r), min(nx, xi[i] + r + 1)
+                y0, y1 = max(0, yi[i] - r), min(ny, yi[i] + r + 1)
+                if x1 > x0 and y1 > y0:
+                    mflux[i] = mod[y0:y1, x0:x1].sum()
+
+            data["Total_flux"] = mflux.astype(data["Total_flux"].dtype)
+            tab.data = data
+            hdul.writeto(SrlOut, overwrite=True)
+            npos = int((mflux > 0).sum())
+            print("modelcat: %d sources, %d with model flux (total %.2f Jy, max %.3f); "
+                  "the rest are set to 0 and dropped by FluxMin"
+                  % (ra.size, npos, mflux.sum(), mflux.max()))
+
+    autofacet:
+        info: |
+            Facet centres from the DI products: every source with its OWN artefacts ("spokes") at the centre
+            of a square facet, the rest of the image on a square DiamMax lattice -- auto_facet_tool/auto_facet.py
+            (README.md there: detection by an inner/outer residual annulus that rejects a bright neighbour's
+            spokes; the lattice; close pairs merged).  Output: <Prefix>.FacetCentres.npy for DDFacet
+            --Facets-CatCentres and killMS --FacetCentres (needs ddfacet >= v0.15.0), + .facets.reg and
+            .facets.json.  Real profile mergA_tim (2026-10-01): t1 DD/DI far-field 0.899 -> 0.650 with 128
+            facets instead of 174; t0 neutral at ~55 % of the run time.
+        image:
+            _use: vars.tim-molteno.images
+            name: tmolteno/ddfacet
+        inputs:
+            Restored:
+                dtype: File
+                required: true
+                info: the DI restored image (finalize-deconvolution's .app.restored.fits)
+            Residual:
+                dtype: File
+                required: true
+                info: its residual (.app.residual.fits) -- the artefacts are measured here
+            SourceCat:
+                dtype: File
+                required: true
+                info: the model-flux catalogue (model-catalogue's SrlOut), for candidate positions
+            Prefix:
+                dtype: str
+                required: true
+            DiamMax:
+                dtype: float
+                default: 0.3
+                info: lattice spacing = facet size, deg (the ddfacet cab's Facets.DiamMax)
+            MergeArcmin:
+                dtype: float
+                default: 2.0
+            NCand:
+                dtype: int
+                default: 40
+            MinExcess:
+                dtype: float
+                default: 1.5
+            MinFalloff:
+                dtype: float
+                default: 1.4
+        outputs:
+            FacetCentres:
+                dtype: File
+                implicit: '{current.Prefix}.FacetCentres.npy'
+                must_exist: true
+            Summary:
+                dtype: File
+                implicit: '{current.Prefix}.facets.json'
+                must_exist: false
+        flavour:
+            kind: python-code
+        command: |
+            import os
+            import sys
+            # the repository is the container's working directory (stimela binds it)
+            sys.path.insert(0, os.path.join(os.getcwd(), "auto_facet_tool"))
+            import auto_facet
+            rc = auto_facet.main([Restored, Residual, SourceCat, Prefix,
+                                  "--diam-max", str(DiamMax), "--merge-arcmin", str(MergeArcmin),
+                                  "--n-cand", str(NCand), "--min-excess", str(MinExcess),
+                                  "--min-falloff", str(MinFalloff)])
+            if rc:
+                raise SystemExit(rc)
+
+    snapnodes:
+        info: |
+            Snap the DD direction nodes that sit far from their flux onto the dominant source of the
+            cell they own.
+
+            Why: the node is where a direction's DD gain and primary-beam sample live (DDFacet
+            assigns every imaging facet to its nearest node -- verified 203/203 and 191/191 on the
+            uv2500 products), so a node far from the flux its cell actually carries corrects that
+            flux with a gain anchored somewhere else.  Measured with `tools/facet-check.py`, target
+            0 has S0 26.3', S7 20.4' and **S9 62.9'**, target 1 S4 23.9' and S7 23.2', against ~3'
+            for the other nodes; at 1 deg from the pointing centre the beam differs from the node's
+            by tens of percent.
+
+            **What "flux" means here, and why the guard is not optional.**  A first version moved
+            every node onto its cell's brightest source measured by the model flux in the source
+            catalogue.  That fixed the placement but on target 1 it emptied a direction, because
+            the catalogue flux is *intrinsic* while the solver's constraint comes from the
+            *apparent* (beam-weighted) flux: the 0.042 Jy source it snapped onto sits near the field
+            edge, where the beam leaves almost nothing to calibrate against, and the cell's
+            beam-weighted model flux went from 0.052 Jy to **0.000**.  So this version measures and
+            guards on exactly the quantity the acceptance metric uses -- the model image over the
+            cleaned mask, each pixel assigned to its nearest node -- and it:
+              * considers only nodes further than `MinShift` (default 3') from the brightest model
+                pixel of their own cell;
+              * applies moves one at a time, worst first, rejecting any that increases the number of
+                **starved** directions (a cell below `StarveFrac` (default 0.1) of the median cell
+                flux);
+              * iterates to a fixed point, and logs the starved count, the flux balance and the
+                node-to-flux distances before and after, so the step's own output says whether it
+                helped or declined.
+            The input clustering is never edited in place: the GA original is kept beside the output
+            as `<OutClusterCat>.ga.npy`, and the details go to `<OutClusterCat>.snap.json`.
+        image:
+            _use: vars.tim-molteno.images
+            name: tmolteno/ddfacet
+        inputs:
+            InClusterCat:
+                dtype: File
+                required: true
+                info: |
+                    The clustering step's `*.ClusterCat.npy` (ra/dec in radians).  Named
+                    `InClusterCat` because the write target is the *same* path in practice: stimela
+                    refuses a cab whose input and output share a name, and the in-place write (with
+                    the GA original kept as `<path>.ga.npy`) is what lets the existing downstream
+                    steps pick the snapped nodes up without rewiring them.
+            SourceCat:
+                dtype: File
+                required: true
+                info: The `*.srl` the clustering was given -- `modelcat`'s output (positions from RA_max/DEC_max in degrees).
+            ModelImage:
+                dtype: File
+                required: true
+                info: The APPARENT model image of the same pass (`{prefix}.app.model.fits`), i.e. what the solver sees.
+            MaskImage:
+                dtype: File
+                required: true
+                info: The cleaned mask of the same pass (`{prefix}.mask01.fits`) -- the pixels that were modelled.
+            # NB: the write target is NOT declared as an input -- it is the cab's `OutClusterCat`
+            # output, assigned by the step (see `modelcat` for the same shape).  Declaring it in both
+            # places is rejected by stimela ("parameter appears in both inputs and outputs").
+            MinShift:
+                dtype: float
+                default: 3.0
+                info: Only nodes further than this (arcmin) from their cell's brightest model pixel move.
+            StarveFrac:
+                dtype: float
+                default: 0.1
+                info: A cell below this fraction of the median cell flux counts as starved; no move may add one.
+            MaxIter:
+                dtype: int
+                default: 6
+        outputs:
+            OutClusterCat:
+                dtype: File
+                must_exist: false
+                required: true
+        flavour:
+            kind: python-code
+        command: |
+            import json
+            import numpy as np
+            from astropy.io import fits
+
+            cc = np.load(InClusterCat, allow_pickle=True).view(np.recarray)
+            ra0, dec0 = cc.ra.copy(), cc.dec.copy()
+
+            with fits.open(ModelImage, memmap=True) as h:
+                mod = np.asarray(h[0].data, dtype=np.float64)
+                while mod.ndim > 2:
+                    mod = mod[0]
+            with fits.open(MaskImage) as h:
+                mask = np.squeeze(h[0].data) > 0.5
+            ys, xs = np.nonzero(mask)
+            vals = mod[ys, xs]
+
+            with fits.open(SourceCat) as h:
+                tab = h[1].data
+                names = tab.names
+                sra = np.radians(np.asarray(tab["RA_max"] if "RA_max" in names else tab["RA"], float))
+                sdec = np.radians(np.asarray(tab["DEC_max"] if "DEC_max" in names else tab["DEC"], float))
+                sflux = np.asarray(tab["Total_flux"], float)
+            keep = sflux > 0
+            sra, sdec, sflux = sra[keep], sdec[keep], sflux[keep]
+
+            # pixel <-> l,m for the mask pixels; the image WCS is only needed for the model, and
+            # `Model_kMS.fits`/`app.model.fits` share the restored image's frame, so the mask's own
+            # pixel grid is the reference here (both are the same 3087^2 grid).
+            with fits.open(MaskImage) as h:
+                hdr = h[0].header
+            from astropy.wcs import WCS
+            w = WCS(hdr).celestial
+            px, py = w.all_pix2world(xs, ys, 0)
+            pra, pdec = np.radians(px), np.radians(py)
+
+            ra_ref, dec_ref = float(np.mean(pra)), float(np.mean(pdec))
+
+            def lm(ra, dec):
+                l = np.cos(dec) * np.sin(ra - ra_ref)
+                m = (np.sin(dec) * np.cos(dec_ref)
+                     - np.cos(dec) * np.sin(dec_ref) * np.cos(ra - ra_ref))
+                return l, m
+
+            pl, pm = lm(pra, pdec)
+            sl, sm = lm(sra, sdec)
+            arcmin = 180.0 / np.pi * 60.0
+
+            def metrics(ra, dec):
+                """Per-cell apparent masked model flux, per-pixel assignment, node->brightest."""
+                nl, nm = lm(ra, dec)
+                d = np.hypot(pl.reshape(1, -1) - nl.reshape(-1, 1), pm.reshape(1, -1) - nm.reshape(-1, 1))
+                who = np.argmin(d, axis=0)
+                flux = np.array([vals[who == k].sum() for k in range(ra.size)])
+                dbright = np.full(ra.size, np.nan)
+                for k in range(ra.size):
+                    sel = np.where(who == k)[0]
+                    if sel.size:
+                        dbright[k] = np.hypot(pl[sel][np.argmax(vals[sel])] - nl[k],
+                                              pm[sel][np.argmax(vals[sel])] - nm[k]) * arcmin
+                bal = float(flux.std() / flux.mean()) if flux.mean() else float("nan")
+                return flux, who, dbright, bal, d
+
+            flux0, who0, db0, bal0, d0 = metrics(cc.ra, cc.dec)
+            thr = float(StarveFrac) * float(np.median(flux0))
+            starved0 = int((flux0 < thr).sum())
+            print("snapnodes: %d nodes, %d mask pixels, %d modelled sources (total catalogue flux %.2f Jy)"
+                  % (cc.ra.size, vals.size, sra.size, sflux.sum()))
+            print("  before: starved (<%.1f%% of the median cell flux, i.e. <%.4f Jy): %d   balance %.3f   node->flux median %.1f' max %.1f'"
+                  % (100 * float(StarveFrac), thr, starved0, bal0,
+                     np.nanmedian(db0), np.nanmax(db0)))
+
+            # positions in l,m per source, for the candidate choice
+            empty_moves, moved = 0, []
+            applied = [None] * cc.ra.size          # last source each node was snapped onto
+            for it in range(int(MaxIter)):
+                nl, nm = lm(cc.ra, cc.dec)
+                ds = np.hypot(sl.reshape(1, -1) - nl.reshape(-1, 1), sm.reshape(1, -1) - nm.reshape(-1, 1))
+                who_s = np.argmin(ds, axis=0)
+                cand, target = np.full(cc.ra.size, np.nan), [None] * cc.ra.size
+                flux_k, _, db_k, _, _ = metrics(cc.ra, cc.dec)
+                for k in range(cc.ra.size):
+                    sel = np.where(who_s == k)[0]
+                    if sel.size == 0 or not np.isfinite(db_k[k]):
+                        continue
+                    j = sel[np.argmax(sflux[sel])]
+                    cand[k], target[k] = db_k[k], j
+                n_accept = 0
+                for k in np.argsort(np.where(np.isnan(cand), -1.0, cand))[::-1]:
+                    if not np.isfinite(cand[k]) or cand[k] <= float(MinShift):
+                        continue
+                    if target[k] == applied[k]:
+                        # already snapped onto that source in an earlier pass: the node now sits ON
+                        # it, and the remaining distance to the cell's brightest model *pixel* is a
+                        # different quantity (catalogue source vs image pixel) -- moving again would
+                        # be a no-op churn, so stop here.
+                        continue
+                    ra_k, dec_k = cc.ra[k], cc.dec[k]
+                    real_move = np.hypot((sra[target[k]] - ra_k) * np.cos(dec_k),
+                                         sdec[target[k]] - dec_k) * arcmin
+                    if real_move <= float(MinShift):
+                        continue
+                    cc.ra[k], cc.dec[k] = sra[target[k]], sdec[target[k]]
+                    flux1, _, _, _, _ = metrics(cc.ra, cc.dec)
+                    if int((flux1 < thr).sum()) > starved0:
+                        cc.ra[k], cc.dec[k] = ra_k, dec_k       # would starve a direction: veto
+                        empty_moves += 1
+                        continue
+                    applied[k] = target[k]
+                    n_accept += 1
+                    moved.append([int(k), float(cand[k]), float(sflux[target[k]])])
+                print("  pass %d: %d move(s) accepted, %d vetoed (they would have starved a direction)"
+                      % (it + 1, n_accept, empty_moves))
+                if n_accept == 0:
+                    break
+
+            flux1, who1, db1, bal1, d1 = metrics(cc.ra, cc.dec)
+            starved1 = int((flux1 < thr).sum())
+            shift = np.hypot((cc.ra - ra0) * np.cos(cc.dec.mean()), cc.dec - dec0) * arcmin
+            print("  after:  starved: %d   balance %.3f   node->flux median %.1f' max %.1f'   (%d node(s) moved, largest %.1f')"
+                  % (starved1, bal1, np.nanmedian(db1), np.nanmax(db1),
+                     int((shift > 1e-9).sum()), float(shift.max())))
+            for k, c, f in moved:
+                print("    node %2d moved %5.1f' onto a source of %.3f Jy (cell was %.1f' off its flux)"
+                      % (k, shift[k], f, c))
+            if not moved:
+                print("  nothing to do: every node is within %.1f' of its cell's brightest model pixel"
+                      % float(MinShift))
+
+            if OutClusterCat == InClusterCat:
+                import shutil
+                shutil.copyfile(InClusterCat, InClusterCat + ".ga.npy")
+                print("  kept the GA clustering as %s.ga.npy" % InClusterCat)
+            np.save(OutClusterCat, cc)
+            with open(OutClusterCat + ".snap.json", "w") as f:
+                json.dump({"input": InClusterCat, "sourcecat": SourceCat,
+                           "model_image": ModelImage, "mask_image": MaskImage,
+                           "min_shift_arcmin": float(MinShift), "starve_frac": float(StarveFrac),
+                           "starved_before": starved0, "starved_after": starved1,
+                           "balance_before": bal0, "balance_after": bal1,
+                           "node_to_flux_before": [None if not np.isfinite(v) else float(v) for v in db0],
+                           "node_to_flux_after": [None if not np.isfinite(v) else float(v) for v in db1],
+                           "moved": moved,
+                           "ra_before": ra0.tolist(), "dec_before": dec0.tolist(),
+                           "ra_after": cc.ra.tolist(), "dec_after": cc.dec.tolist()}, f, indent=1)
+            print("snapnodes: wrote %s (+ .snap.json)" % OutClusterCat)
