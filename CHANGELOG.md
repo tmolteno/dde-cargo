@@ -16,6 +16,10 @@ DDFacet's `CHANGES.md` and commit history, killMS's commit history, and
   from the `../DDFacet` and `../killMS` commit history, bumps the package and
   image pins, runs the tests and build, pushes the tag that triggers the PyPI
   workflow, and creates the GitHub release with the built artifacts.
+- `docs/cabs.md`: generated cab reference covering every packaged cab, its
+  inputs, outputs, image and purpose, built from the YAMLs plus the curated
+  `docs/cab_notes.yml`; `invoke docs` regenerates it and `invoke docs --check`
+  verifies it is current.
 
 ## [0.1.1] - 2026-10-18
 

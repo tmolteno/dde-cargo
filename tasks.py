@@ -7,6 +7,8 @@ tag history of the sibling ``../DDFacet`` and ``../killMS`` checkouts:
     invoke version                     # current package + pinned/upstream tags
     invoke changelog                   # print the next release's changelog
     invoke changelog --allow-same      # ... even when no image tag moved
+    invoke docs                        # regenerate docs/cabs.md
+    invoke docs --check                # verify docs/cabs.md is current
     invoke release --dry-run           # show the complete release plan
     invoke release --part patch --yes  # bump, test, build, tag, publish, release
 
@@ -17,11 +19,12 @@ tag history of the sibling ``../DDFacet`` and ``../killMS`` checkouts:
    those tags and inserts it into ``CHANGELOG.md``;
 3. bumps this package's version (patch by default) and updates every image
    pin in the cab YAMLs and the README;
-4. runs ``uv lock``, the test suite and ``uv build``;
-5. commits, creates an annotated ``vX.Y.Z`` tag and pushes both to GitHub --
+4. regenerates ``docs/cabs.md`` from the packaged YAMLs;
+5. runs ``uv lock``, the test suite and ``uv build``;
+6. commits, creates an annotated ``vX.Y.Z`` tag and pushes both to GitHub --
    the tag push triggers ``.github/workflows/publish_pypi.yaml``;
-6. waits for that workflow to succeed and verifies the version is on PyPI;
-7. creates the GitHub release with the generated notes and the built wheel
+7. waits for that workflow to succeed and verifies the version is on PyPI;
+8. creates the GitHub release with the generated notes and the built wheel
    and sdist attached.
 
 Requirements: ``invoke`` and ``plumbum`` (the ``dev`` dependency group),
@@ -611,6 +614,23 @@ def version(c) -> None:
 
 @task(
     help={
+        "check": "verify docs/cabs.md is current without writing it",
+    }
+)
+def docs(c, check: bool = False) -> None:
+    """Regenerate the cab reference from the packaged YAMLs."""
+    argv = ["uv", "run", "python", "tools/gen_cab_docs.py"]
+    if check:
+        argv.append("--check")
+    try:
+        _run(*argv, stream=True)
+    except RuntimeError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        raise SystemExit(1) from exc
+
+
+@task(
+    help={
         "part": "version part to bump: patch (default), minor or major",
         "ddfacet_tag": "override the DDFacet target tag (default: latest)",
         "killms_tag": "override the killMS target tag (default: latest)",
@@ -688,6 +708,9 @@ def release(
         _insert_changelog(plan["section"], plan["package_old"], plan["package_new"])
         _verify_pins(plan["ddfacet_new"], plan["killms_new"])
         notes_section = _changelog_entry(plan["package_new"])
+
+        print("=== regenerating docs/cabs.md")
+        _run("uv", "run", "python", "tools/gen_cab_docs.py", stream=True)
 
         print("=== refreshing uv.lock")
         _run("uv", "lock", "--quiet")

@@ -1,0 +1,448 @@
+# Curated prose for the generated cab reference (docs/cabs.md).
+#
+# The parameter tables are generated from the packaged cab YAMLs; everything
+# here is hand-written context that cannot be derived from a schema.  Keep the
+# purpose one-liners short -- they appear in the at-a-glance table.
+
+bdsf.catalog:
+  purpose: "Image-only override that runs cult-cargo's PyBDSF catalogue step in the multi-arch DDFacet image."
+  notes: |
+    This entry has no command and no parameters.  It is an **image-only
+    override** for cult-cargo's `bdsf.catalog` cab, whose upstream
+    `quay.io/stimela2/bdsf` image is amd64-only.  The DDFacet image carries a
+    source-built PyBDSF for amd64 and arm64.
+
+    Because stimela builds every cab at load time, cult-cargo's `bdsf.yml` must
+    already be loaded when `ddfacet.yml` merges in.  The `(cultcargo)` include
+    must come first:
+
+    ```yaml
+    _include:
+      - (cultcargo):
+          - bdsf.yml
+      - (dde_cargo):
+          - ddfacet.yml
+    ```
+
+    The override is not a standalone `bdsf.catalog` definition; do not include
+    `ddfacet.yml` without cult-cargo's `bdsf.yml`.
+
+ddfacet:
+  purpose: "Direction-dependent imager, gridder and deconvolver (`DDF.py`)."
+  notes: |
+    `ddfacet` is the main imaging cab.  It reads a Measurement Set, grids it
+    (optionally with direction-dependent Jones terms and primary beams),
+    deconvolves the resulting image in facets, and writes the image and model
+    products.
+
+    Every parset namespace is passed as a dashed CLI option: `Data.MS` becomes
+    `--Data-MS`, `Image.NPix` becomes `--Image-NPix`, and so on.  The inputs
+    below are therefore the DDFacet parset itself; the generated schema file
+    `ddfacet_stimela_inputs_schema.yml` is the authoritative list.
+
+    The main products are the `parset_out` file (which later steps can inherit
+    or replay), the dirty and restored FITS images, and the DicoModel.  The
+    intrinsic restored image (`int_restored_mfs`) is the one the DD direction
+    clustering should use -- see `modelcat` and the DDFacet#33 note.
+
+    A typical DD run uses `ddfacet` once for a DI image, builds directions and
+    a mask, solves with `killms`, then runs `ddfacet` again with the DD
+    solutions applied.  `ddfacet-memory-plan` can choose `Parallel.NCPU`,
+    `Data.ChunkHours` and `Selection.ChanStep` for each imaging step.
+  example: |
+    ddfacet-target:
+      cab: ddfacet
+      params:
+        Data.MS: mydata.ms
+        Output.Name: target0
+        Image.NPix: 4096
+        Deconv.Mode: HMP
+  namespace_info:
+    Data: "Input Measurement Set, column and chunking."
+    Predict: "Predict/resume control for model visibilities."
+    Selection: "Field, DDID, time, channel and baseline selection."
+    Output: "Output names and image products."
+    SPIMaps: "Spectral-index map outputs."
+    Image: "Image size, cell size and imaging mode."
+    Facets: "Facet tessellation, direction nodes and DD metadata."
+    Weight: "Visibility weighting, including Briggs/robust."
+    RIME: "RIME gridding/degridding and decorrelation modes."
+    CF: "Convolution-function support and oversampling."
+    Comp: "Component and cluster catalogue handling."
+    Parallel: "CPU/thread counts and memory controls."
+    Cache: "Cache directories and reuse."
+    Beam: "Primary-beam model, evaluation and smoothing."
+    Freq: "Frequency and channel handling."
+    DDESolutions: "DD solution files and Jones application."
+    PointingSolutions: "Pointing-solution input."
+    Deconv: "Deconvolution mode and stopping criteria."
+    Mask: "Clean-mask options."
+    Noise: "Noise-map and automatic-masking options."
+    HMP: "HMP deconvolution options."
+    Hogbom: "Hogbom deconvolution options."
+    WSCMS: "WSCMS deconvolution options."
+    Montblanc: "Montblanc deconvolution options."
+    SSDClean: "Options shared by the SSD deconvolution modes."
+    SSD2: "SSD2-specific deconvolution options."
+    SSD3: "SSD3-specific deconvolution options."
+    MultiSliceDeconv: "MultiSlice deconvolution options."
+    GAClean: "Genetic-algorithm clean options."
+    MORESANE: "MORESANE deconvolution options."
+    Log: "Logging configuration."
+    Debug: "Diagnostic and debugging switches."
+    Misc: "Miscellaneous DDFacet options."
+  parameter_info:
+    parset: "Optional existing DDFacet parset to load before the parameters below (passed as a positional argument)."
+
+killms:
+  purpose: "Direction-dependent gain solver (`kMS.py`)."
+  notes: |
+    `killms` solves per-antenna, per-direction complex gains (Jones matrices)
+    against a sky model, using the model visibilities predicted by DDFacet.  It
+    is the calibration half of the DDE loop: the DD image and direction
+    catalogue come from `ddfacet`/`clustercat`, and the solution set is fed
+    back into a corrected `ddfacet` run.
+
+    Unlike DDFacet, killMS uses a flat parameter namespace and passes it
+    straight to `kMS.py`.  The most important inputs are the Measurement Set
+    (`MSName`), the model (`SkyModel` or `DicoModel`/`BaseImageName`), the
+    direction catalogue (`NodesFile` or `FacetCentres`), the columns to read
+    and write (`InCol`/`OutCol`), and the solver controls (`SolverType`,
+    `PolMode`, `dt`, `NChanSols`).
+
+    `killms-memory-plan` can choose `NCPU`, `TChunk` and `NChanSols` for the
+    solve.  The solve must run in an image that carries the same killMS version
+    as the cab pin; the memory-plan cab's image follows the killMS pin.
+  example: |
+    killms-target:
+      cab: killms
+      params:
+        MSName: mydata.ms
+        InCol: CORRECTED_DATA
+        OutCol: CORRECTED_DATA
+        BaseImageName: target0
+        NodesFile: target0.ClusterCat.npy
+        SolverType: KAFCA
+        PolMode: Scalar
+        NCPU: 8
+  groups:
+    Input data and columns:
+      - MSName
+      - TChunk
+      - InCol
+      - OutCol
+      - FieldID
+      - DDID
+      - ChanSlice
+      - FlagAnts
+      - UVMinMax
+      - WeightInCol
+      - Weighting
+      - Robust
+      - WeightUVMinMax
+      - WTUV
+      - UpdateWeights
+      - ApplyMode
+      - ApplyToDir
+      - Resolution
+      - ExtSols
+      - SolsDir
+      - OutSolsName
+      - SkipExistingSols
+    Directions, model and facets:
+      - SkyModel
+      - SkyModelCol
+      - BaseImageName
+      - ImagePredictParset
+      - DicoModel
+      - NodesFile
+      - FacetCentres
+      - MaxFacetSize
+      - MinFacetSize
+      - OverS
+      - wmax
+      - MaskImage
+      - DistMaxToCore
+      - FillFactor
+      - DDFCacheDir
+      - RemoveDDFCache
+      - FilterNegComp
+      - ThSolve
+    Beams:
+      - BeamModel
+      - BeamAt
+      - LOFARBeamMode
+      - DtBeamMin
+      - CenterNorm
+      - NChanBeamPerMS
+      - FITSParAngleIncDeg
+      - FITSFile
+      - FITSLAxis
+      - FITSMAxis
+      - FITSFeed
+      - FITSFeedSwap
+      - FITSVerbosity
+      - FITSFrame
+      - ApplyPJones
+      - FlipVisibilityHands
+      - FeedAngle
+    Solver:
+      - SolverType
+      - PrecisionDot
+      - PolMode
+      - dt
+      - NChanSols
+      - NIterLM
+      - LambdaLM
+      - LambdaTk
+      - NIterKF
+      - LambdaKF
+      - InitLM
+      - InitLMdt
+      - CovP
+      - CovQ
+      - PowerSmooth
+      - evPStep
+      - evPStepStart
+      - EvolutionSolFile
+      - Decorrelation
+      - FreeFullSub
+      - FreePredictColName
+      - FreePredictGainColName
+      - kills
+      - invert
+      - ClipMethod
+      - MergeStations
+      - CompressionMode
+      - CompressionDirFile
+      - MergeBeamToAppliedSol
+      - PreApplySols
+      - PreApplyMode
+    Parallel and diagnostics:
+      - Parallel
+      - NCPU
+      - NThread
+      - DoPlot
+      - DoBar
+      - SubOnly
+      - DebugPdb
+  parameter_info:
+    MSName: "Input Measurement Set, or a text file listing one MS per line."
+    TChunk: "Time chunk for one solve task (hours or an H:M:S string)."
+    InCol: "Visibility column read by the solver, e.g. DATA or CORRECTED_DATA."
+    OutCol: "Column written with corrected visibilities; use None to skip writing."
+    OutSolsName: "Name of the output solution set."
+    SolsDir: "Directory containing solution files."
+    BaseImageName: "Base name of the sky-model/image products used for prediction."
+    SkyModel: "Sky-model source list or image used to predict the model."
+    SkyModelCol: "Column/field of the sky model to use."
+    DicoModel: "DDFacet DicoModel used to predict the model."
+    NodesFile: "Direction/node catalogue, typically a ClusterCat.npy file."
+    FacetCentres: "Facet-centre .npy shared with DDFacet --Facets-CatCentres."
+    MaskImage: "Mask restricting the model flux used in the solve."
+    BeamModel: "Primary-beam model: FITS, LOFAR, or none."
+    BeamAt: "Where the primary beam is evaluated, e.g. the pointing centre."
+    SolverType: "Solver algorithm, e.g. KAFCA."
+    PolMode: "Polarisation mode, e.g. Scalar or Full."
+    PrecisionDot: "Precision used by the dot-product kernels."
+    dt: "Solution interval in minutes."
+    NChanSols: "Number of channels per solution task."
+    NCPU: "Worker/thread count for the solve."
+    NThread: "Thread count for the native kernels."
+    Weighting: "Imaging weighting used when predicting the model: Natural, Uniform or Briggs."
+    Robust: "Briggs robust parameter."
+    FlagAnts: "Antennas to flag, by name or index."
+    UVMinMax: "Baseline-length selection in km, as a min,max pair."
+    ChanSlice: "Channel selection for the solve."
+    FieldID: "Field identifier to solve."
+    DDID: "Data-description identifier to solve."
+    MaxFacetSize: "Maximum facet size for prediction tessellation."
+    MinFacetSize: "Minimum facet size for prediction tessellation."
+    OverS: "Convolution-function oversampling."
+    wmax: "Maximum W-term used by the gridder."
+    ApplyPJones: "Apply the primary-beam Jones term when predicting."
+    PreApplySols: "Pre-apply an existing solution set."
+    PreApplyMode: "How pre-applied solutions are combined."
+    ClipMethod: "Outlier clipping method."
+    ApplyMode: "How solutions are applied to the visibilities."
+    UpdateWeights: "Update the weights from the solution statistics."
+    DoPlot: "Enable diagnostic plots."
+    SubOnly: "Restrict the run to a subset of the solution."
+    DoBar: "Show a progress bar."
+
+ddf_makemodel:
+  purpose: "Build a direction-clustering catalogue from a DS9 region (`MakeModel.py`)."
+  notes: |
+    `ddf_makemodel` reads a DS9 region file (`ds9PreClusterFile`) and a base
+    image name, picks the initial cluster positions, and writes a
+    `ClusterCat.npy` file.  `ddf_makemodel` is the simple, region-driven front
+    end; `clustercat` is the catalogue-driven alternative.
+  example: |
+    make-model:
+      cab: ddf_makemodel
+      params:
+        ds9PreClusterFile: sources.reg
+        BaseImageName: target0
+        NCluster: 100
+
+ddf_makemask:
+  purpose: "Make a FITS clean mask from a restored image (`MakeMask.py`)."
+  notes: |
+    `ddf_makemask` thresholds a restored image and writes a FITS mask for the
+    next DDFacet run.  Pass the mask as `Mask.External` on the imaging step;
+    `dilatemask` can grow it by a number of synthesised beams.
+  example: |
+    make-mask:
+      cab: ddf_makemask
+      params:
+        RestoredIm: target0.app.restored.fits
+        Th: 5
+
+dilatemask:
+  purpose: "Dilate an external clean mask by N synthesised beams."
+  notes: |
+    The cab grows the mask with a circular binary-dilation kernel whose radius
+    is `DilateBeams` times the synthesised beam (from `RestoredIm`'s `BMAJ` and
+    the mask's `CDELT2`).  This is useful when the recorded mask is too tight
+    around bright sources; it does not change the deconvolution threshold.
+
+clustercat:
+  purpose: "Cluster a source catalogue into DD direction nodes (`ClusterCat.py`)."
+  notes: |
+    `clustercat` groups the sources in a catalogue into `NCluster` directions
+    and writes `OutClusterCat`, the DD direction catalogue used by `killms`
+    and DDFacet's `--Facets-*` options.  Use `modelcat` first when the
+    clustering should be weighted by the first-pass model flux rather than the
+    apparent catalogue flux.
+  example: |
+    cluster:
+      cab: clustercat
+      params:
+        SourceCat: target0.srl
+        NCluster: 100
+        NGen: 100
+        OutClusterCat: target0.ClusterCat.npy
+
+ddfacet-get-npix:
+  purpose: "Compute the padded image size DDFacet needs."
+  notes: |
+    A small helper around `DDFacet.ToolsDir.ModToolBox.EstimateNpix`.  Pass the
+    desired unpadded size and the DDFacet padding factor; use `NPixOut` for the
+    imaging step's `Image.NPix`.
+  example: |
+    npix:
+      cab: ddfacet-get-npix
+      params:
+        NPixIn: 4096
+        Padding: 1.2
+    ddfacet-target:
+      params:
+        Image.NPix: =steps.npix.NPixOut
+
+modelcat:
+  purpose: "Replace BDSF catalogue fluxes with the first-pass model flux."
+  notes: |
+    Direction clustering balances flux per direction, but what the directions
+    actually carry is the **model** flux.  A restored-image catalogue does not
+    match that; weighting by the model flux moves each direction onto the
+    modelled flux and avoids a starved direction.
+
+    Use the intrinsic, direction-summed model image (`{prefix}.int.model.fits`)
+    and a BDSF source list from the same pass.  Sources with no model flux get
+    flux 0 and are dropped by `clustercat`'s `FluxMin`.  See DDFacet#33.
+
+autofacet:
+  purpose: "Derive facet centres from the DI image products."
+  notes: |
+    `autofacet` detects sources with their own artefacts in the DI residual and
+    places a square facet at each, filling the rest of the image with a
+    `DiamMax` lattice.  It writes `<Prefix>.FacetCentres.npy` for DDFacet
+    `--Facets-CatCentres` and killMS `--FacetCentres`, plus a `.facets.reg`
+    and `.facets.json` summary.
+
+    **Working-directory requirement:** the cab imports
+    `auto_facet_tool/auto_facet.py` from the current working directory, so a
+    `meerkat_imaging` checkout must sit beside the recipe; stimela binds the
+    working directory into the container.
+
+snapnodes:
+  purpose: "Move DD direction nodes onto the dominant modelled source in each cell."
+  notes: |
+    A direction node is where the DD gain and primary beam are sampled.  If a
+    node sits far from the flux its cell carries, the correction is anchored in
+    the wrong place.  `snapnodes` moves such nodes, one at a time and worst
+    first, and rejects any move that increases the number of starved
+    directions.
+
+    It reads the apparent model image (what the solver sees), the cleaned mask,
+    the source catalogue and the input cluster catalogue.  The input clustering
+    is never edited in place: the original is kept as
+    `<OutClusterCat>.ga.npy`, and the details go to `<OutClusterCat>.snap.json`.
+
+ddfacet-memory-plan:
+  purpose: "Suggest DDFacet NCPU, chunk size and channel step from a memory budget."
+  notes: |
+    The planner reads a DDFacet parset (or explicit geometry) and a RAM budget
+    and suggests `Parallel.NCPU`, `Data.ChunkHours` and, only if the band must
+    give, `Selection.ChanStep`.  It is the command-line form of
+    `DDFacet/ToolsDir/ModEstimateMemory.py`.
+
+    **Bootstrap carefully:** a step cannot be planned from the parset it is
+    about to write.  Plan each step from the parset of that step's *previous*
+    run, or pass the geometry (`NPix`, `NFacets`, `NBand`, ...) for a fresh
+    observation with no earlier parset.
+
+    **Threaded line:** for DDFacet >= v0.12 the workers are threads in one
+    process and NCPU is not a memory knob.  With `Threaded: true` (default) the
+    memory is planned at one worker and every usable core is returned as NCPU;
+    `Threaded: false` restores the process-pool model.
+
+    The estimate is about +-40 %: use it to choose between "NCPU 3" and
+    "NCPU 8", not to plan within a gigabyte of the limit.  `PlanOut` is written
+    by the planner itself, so it is an output-like input and must not be
+    pre-created as an existing file.
+  example: |
+    memory-plan:
+      cab: ddfacet-memory-plan
+      params:
+        Parset: =steps.previous-ddfacet.parset_out
+        MS: =recipe.target-ms
+        RamGB: 62
+    ddfacet-target:
+      params:
+        Parallel.NCPU: =steps.memory-plan.NCPU
+        Data.ChunkHours: =steps.memory-plan.ChunkHours
+        Selection.ChanStep: =steps.memory-plan.ChanStep
+
+killms-memory-plan:
+  purpose: "Suggest killMS NCPU, chunk size and solution interval from a memory budget."
+  notes: |
+    The planner estimates a solve's memory from its geometry and a RAM budget
+    and suggests `NCPU`, `TChunk` and `NChanSols`.  It reads the MS for its
+    row/channel/antenna counts when one is given; pass `NRows`, `NChan` and
+    `NA` instead when it cannot be read.
+
+    A solve's memory is the shared model grids, the parent-process peak and the
+    worker peaks.  Only the worker peak responds to NCPU, and it is a
+    measurement from one dataset rather than a derived slope.  Pass
+    `WorkerMiB` from a real `/proc/<pid>/status:VmHWM` and `GridGB` from a
+    prior run of the same DDF cache if you have them.
+
+    With `InProcess: true` (default, killMS >= v3.9) the solver runs as threads
+    in one process and memory is flat in NCPU, so the planner returns every
+    usable core.  `InProcess: false` restores the process-pool model.  The
+    planner returns exit status 1 when nothing fits the budget, so a recipe can
+    branch on it.
+  example: |
+    killms-memory-plan:
+      cab: killms-memory-plan
+      params:
+        MS: =recipe.target-ms
+        NDir: 10
+        RamGB: 54
+        WantNCPU: 6
+    killms-target:
+      params:
+        NCPU: =steps.killms-memory-plan.NCPU
+        TChunk: =steps.killms-memory-plan.TChunk
+        NChanSols: =steps.killms-memory-plan.NChanSols

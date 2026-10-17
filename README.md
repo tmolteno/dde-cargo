@@ -14,15 +14,39 @@ loop. Release history is in [CHANGELOG.md](CHANGELOG.md).
 
 ## Cabs and images
 
-| Cab | Image |
-|---|---|
-| `ddfacet` | `ghcr.io/tmolteno/ddfacet:v0.16.6` |
-| `killms` | `ghcr.io/tmolteno/killms:v3.15.8` |
-| `ddfacet-memory-plan` | `ghcr.io/tmolteno/ddfacet:v0.16.6` |
-| `killms-memory-plan` | `ghcr.io/tmolteno/killms:v3.15.8` |
-| `ddf_makemodel`, `ddf_makemask`, `dilatemask`, `clustercat`, `ddfacet-get-npix`, `bdsf.catalog`, `modelcat`, `autofacet`, `snapnodes` | `ghcr.io/tmolteno/ddfacet:v0.16.6` |
+Full parameter reference: [docs/cabs.md](https://github.com/tmolteno/dde-cargo/blob/main/docs/cabs.md).
+
+| Cab | Purpose | Image |
+|---|---|---|
+| [`bdsf.catalog`][cab-bdsf-catalog] | Image-only override for cult-cargo's PyBDSF step | `ghcr.io/tmolteno/ddfacet:v0.16.6` |
+| [`ddfacet`][cab-ddfacet] | Direction-dependent imager, gridder and deconvolver | `ghcr.io/tmolteno/ddfacet:v0.16.6` |
+| [`killms`][cab-killms] | Direction-dependent gain solver | `ghcr.io/tmolteno/killms:v3.15.8` |
+| [`ddf_makemodel`][cab-ddf-makemodel] | Build a direction catalogue from a DS9 region | `ghcr.io/tmolteno/ddfacet:v0.16.6` |
+| [`ddf_makemask`][cab-ddf-makemask] | Make a FITS clean mask from a restored image | `ghcr.io/tmolteno/ddfacet:v0.16.6` |
+| [`dilatemask`][cab-dilatemask] | Dilate a clean mask by N synthesised beams | `ghcr.io/tmolteno/ddfacet:v0.16.6` |
+| [`clustercat`][cab-clustercat] | Cluster sources into DD direction nodes | `ghcr.io/tmolteno/ddfacet:v0.16.6` |
+| [`ddfacet-get-npix`][cab-ddfacet-get-npix] | Compute the padded image size DDFacet needs | `ghcr.io/tmolteno/ddfacet:v0.16.6` |
+| [`modelcat`][cab-modelcat] | Replace BDSF catalogue fluxes with model flux | `ghcr.io/tmolteno/ddfacet:v0.16.6` |
+| [`autofacet`][cab-autofacet] | Derive facet centres from the DI products | `ghcr.io/tmolteno/ddfacet:v0.16.6` |
+| [`snapnodes`][cab-snapnodes] | Snap DD nodes onto their dominant modelled source | `ghcr.io/tmolteno/ddfacet:v0.16.6` |
+| [`ddfacet-memory-plan`][cab-ddfacet-memory-plan] | Suggest DDFacet memory and parallel settings | `ghcr.io/tmolteno/ddfacet:v0.16.6` |
+| [`killms-memory-plan`][cab-killms-memory-plan] | Suggest killMS memory and parallel settings | `ghcr.io/tmolteno/killms:v3.15.8` |
 
 All images are published for amd64 and arm64.
+
+[cab-bdsf-catalog]: https://github.com/tmolteno/dde-cargo/blob/main/docs/cabs.md#cab-bdsf-catalog
+[cab-ddfacet]: https://github.com/tmolteno/dde-cargo/blob/main/docs/cabs.md#cab-ddfacet
+[cab-killms]: https://github.com/tmolteno/dde-cargo/blob/main/docs/cabs.md#cab-killms
+[cab-ddf-makemodel]: https://github.com/tmolteno/dde-cargo/blob/main/docs/cabs.md#cab-ddf-makemodel
+[cab-ddf-makemask]: https://github.com/tmolteno/dde-cargo/blob/main/docs/cabs.md#cab-ddf-makemask
+[cab-dilatemask]: https://github.com/tmolteno/dde-cargo/blob/main/docs/cabs.md#cab-dilatemask
+[cab-clustercat]: https://github.com/tmolteno/dde-cargo/blob/main/docs/cabs.md#cab-clustercat
+[cab-ddfacet-get-npix]: https://github.com/tmolteno/dde-cargo/blob/main/docs/cabs.md#cab-ddfacet-get-npix
+[cab-modelcat]: https://github.com/tmolteno/dde-cargo/blob/main/docs/cabs.md#cab-modelcat
+[cab-autofacet]: https://github.com/tmolteno/dde-cargo/blob/main/docs/cabs.md#cab-autofacet
+[cab-snapnodes]: https://github.com/tmolteno/dde-cargo/blob/main/docs/cabs.md#cab-snapnodes
+[cab-ddfacet-memory-plan]: https://github.com/tmolteno/dde-cargo/blob/main/docs/cabs.md#cab-ddfacet-memory-plan
+[cab-killms-memory-plan]: https://github.com/tmolteno/dde-cargo/blob/main/docs/cabs.md#cab-killms-memory-plan
 
 ## Install
 
@@ -114,9 +138,11 @@ the publish is live at [pypi.org/project/dde-cargo](https://pypi.org/project/dde
 
 ```sh
 uv sync --all-groups
-uv run pytest          # schema contracts for the packaged cabs
+uv run pytest          # schema + generated-docs contracts
 uv build               # wheel + sdist into dist/
-invoke --list          # release tasks: version, changelog, release
+invoke --list          # tasks: version, changelog, docs, release
+invoke docs            # regenerate docs/cabs.md
+invoke docs --check    # verify docs/cabs.md is current
 ```
 
 An end-to-end smoke check (loads the cabs through stimela's real spec loader,
@@ -154,6 +180,8 @@ invoke --list                  # show the available release tasks
 invoke version                 # package version and pinned/latest image tags
 invoke changelog               # print the next release's changelog section
 invoke changelog --allow-same  # ... even when no image tag has moved
+invoke docs                    # regenerate docs/cabs.md
+invoke docs --check            # verify docs/cabs.md is current
 invoke release --dry-run       # show the complete plan; change nothing
 invoke release --part patch    # the real release
 ```
@@ -166,13 +194,17 @@ pinned by the cabs, and the latest tags in the upstream checkouts.
 `v0.16.2` … `v0.16.6`) and notes killMS releases that are rebuilds on a new
 DDFacet image.
 
+`invoke docs` regenerates the cab reference from the packaged YAMLs and
+`docs/cab_notes.yml`; `invoke docs --check` reports whether the checked-in
+`docs/cabs.md` is current.
+
 `invoke release` performs the complete chain:
 
 1. generates and inserts the changelog section, keeping any `[Unreleased]`
    notes;
-2. bumps `version` in `pyproject.toml`, refreshes `uv.lock`, and updates the
-   DDFacet/killMS pins in the cab YAMLs and the image table above;
-3. runs the test suite and `uv build`;
+2. bumps `version` in `pyproject.toml`, updates the DDFacet/killMS pins in the
+   cab YAMLs and the image table above, and regenerates `docs/cabs.md`;
+3. refreshes `uv.lock`, runs the test suite and `uv build`;
 4. commits the changes, creates an annotated `vX.Y.Z` tag, and pushes `main`
    and the tag;
 5. waits for the tag's `publish_pypi.yaml` workflow to succeed and verifies
