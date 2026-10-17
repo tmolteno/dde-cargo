@@ -5,10 +5,12 @@
 [Stimela](https://github.com/caracal-pipeline/stimela) cabs for
 DDFacet/Killms on both arm64 and x86-64 systems.
 
-The cab YAMLs in `dde_cargo/` are verbatim copies of `meerkat_imaging/cabs/`
-(`ddfacet.yml`, its two `_include`d parameter schemas, and the two
-memory-plan cabs). A change to a cab starts in that repository; copy it here,
-bump the version, and tag. Release history is in [CHANGELOG.md](CHANGELOG.md).
+DDFacet is a direction-dependent radio-interferometric imager: it grids
+visibilities and deconvolves wide fields in facets, applying per-direction
+Jones terms and primary beams. killMS is its companion calibration engine,
+solving per-antenna, per-direction complex gains against a sky model. Together
+they form the imaging and direction-dependent calibration halves of the DDE
+loop. Release history is in [CHANGELOG.md](CHANGELOG.md).
 
 ## Cabs and images
 
