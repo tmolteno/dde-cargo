@@ -77,7 +77,7 @@ vars:
       name: ddfacet
       # Pin this to whatever the recipe uses; a recipe with its own image var
       # should override `image:` on the cab instead.
-      version: v0.16.1
+      version: v0.16.6
 
 cabs:
     ddfacet-memory-plan:

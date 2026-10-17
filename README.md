@@ -4,17 +4,17 @@ Stimela cabs for DDFacet/Killms on both arm64 and x86-64 systems.
 The cab YAMLs in `dde_cargo/` are verbatim copies of `meerkat_imaging/cabs/`
 (`ddfacet.yml`, its two `_include`d parameter schemas, and the two
 memory-plan cabs). A change to a cab starts in that repository; copy it here,
-bump the version, and tag.
+bump the version, and tag. Release history is in [CHANGELOG.md](CHANGELOG.md).
 
 ## Cabs and images
 
 | Cab | Image |
 |---|---|
-| `ddfacet` | `ghcr.io/tmolteno/ddfacet:v0.16.1` |
-| `killms` | `ghcr.io/tmolteno/killms:v3.15.3` |
-| `ddfacet-memory-plan` | `ghcr.io/tmolteno/ddfacet:v0.16.1` |
-| `killms-memory-plan` | `ghcr.io/tmolteno/killms:v3.15.3` |
-| `ddf_makemodel`, `ddf_makemask`, `dilatemask`, `clustercat`, `ddfacet-get-npix`, `bdsf.catalog`, `modelcat`, `autofacet`, `snapnodes` | `ghcr.io/tmolteno/ddfacet:v0.16.1` |
+| `ddfacet` | `ghcr.io/tmolteno/ddfacet:v0.16.6` |
+| `killms` | `ghcr.io/tmolteno/killms:v3.15.8` |
+| `ddfacet-memory-plan` | `ghcr.io/tmolteno/ddfacet:v0.16.6` |
+| `killms-memory-plan` | `ghcr.io/tmolteno/killms:v3.15.8` |
+| `ddf_makemodel`, `ddf_makemask`, `dilatemask`, `clustercat`, `ddfacet-get-npix`, `bdsf.catalog`, `modelcat`, `autofacet`, `snapnodes` | `ghcr.io/tmolteno/ddfacet:v0.16.6` |
 
 All images are published for amd64 and arm64.
 
@@ -24,7 +24,7 @@ All images are published for amd64 and arm64.
 pip install dde-cargo
 ```
 
-Requires Python >= 3.10,< 3.14 (the same window as `skarabina-cargo`) and
+Requires Python >= 3.10,< 3.15 (the same window as `skarabina-cargo`) and
 installs `stimela>=2.1.4` — every cab runs in its container, so the host needs
 nothing else.
 
@@ -91,7 +91,7 @@ with `uv`, and publishes from the `pypi` environment.
    with owner `tmolteno`, repository `dde-cargo`, workflow `publish_pypi.yaml`,
    environment `pypi`. The workflow filename must match exactly.
 2. Bump `version` in `pyproject.toml`.
-3. `git commit -m "..." && git tag v0.1.0 && git push origin main --follow-tags`
+3. `git commit -m "..." && git tag -a vX.Y.Z -m "..." && git push origin main --follow-tags`
 
 The workflow run appears under the repo's Actions with the `pypi` environment;
 the publish is live at [pypi.org/project/dde-cargo](https://pypi.org/project/dde-cargo/).

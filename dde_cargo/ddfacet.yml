@@ -136,7 +136,7 @@ vars:
             # bdsf.catalog runs on arm64 without a bind; a failed batch task's reason reaches the exception
             # (#22); SSD3 --Posterior wired (#32, not run end to end).  Default path (MeerKAT FITS beam) unchanged.
             # killMS v3.13.0.
-            version: v0.16.1
+            version: v0.16.6
 
 cabs:
     # The PyBDSF catalogue step runs in the pinned DDFacet image on every host (cult-cargo's
@@ -323,7 +323,7 @@ cabs:
             # v3.13.0 (2026-10-02): --BeamModel LOFAR is EveryBeam, the same code DDFacet images with
             # (killMS#36; was a ModuleNotFoundError on the retired lofar module); rebuilt on ddfacet v0.15.2.
             # The FITS beam (MeerKAT) path is unchanged.
-            version: v3.15.3
+            version: v3.15.8
         command: kMS.py
         policies:
             # pass True options as ..option 1
