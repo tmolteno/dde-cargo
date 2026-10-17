@@ -17,7 +17,13 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = ["pytest>=8.4.0", "pyyaml>=6.0"]
+dev = [
+    # tasks.py: the invoke/plumbum release automation
+    "invoke==3.0.3",
+    "plumbum==2.0.2",
+    "pytest>=8.4.0",
+    "pyyaml>=6.0",
+]
 # For the smoke check that the cabs load through stimela: ddfacet.yml's
 # `bdsf.catalog` entry is an image override for cult-cargo's cab, so the
 # pair must load together (same order as upstream's white-belt-4-ddfacet.yml)

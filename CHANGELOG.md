@@ -4,12 +4,18 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-The 0.1.1 notes are assembled from the upstream source repositories:
-DDFacet's `CHANGES.md` and commit history for `v0.16.2`–`v0.16.6`, killMS's
-commit history for `v3.15.4`–`v3.15.8`, and `meerkat_imaging`'s pin commits
-on `main`.
+The release notes are assembled from the upstream source repositories:
+DDFacet's `CHANGES.md` and commit history, killMS's commit history, and
+`meerkat_imaging`'s pin commits on `main`.
 
 ## [Unreleased]
+
+### Added
+
+- `tasks.py`: invoke/plumbum release automation. It generates the changelog
+  from the `../DDFacet` and `../killMS` commit history, bumps the package and
+  image pins, runs the tests and build, pushes the tag that triggers the PyPI
+  workflow, and creates the GitHub release with the built artifacts.
 
 ## [0.1.1] - 2026-10-18
 

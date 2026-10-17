@@ -86,6 +86,29 @@ Trusted publishing (OIDC) — there is no API token. The GitHub Actions
 workflow `.github/workflows/publish_pypi.yaml` fires on a `vX.Y.Z` tag, builds
 with `uv`, and publishes from the `pypi` environment.
 
+### Automated release
+
+`tasks.py` (an invoke/plumbum script) drives the whole release from the
+sibling `../DDFacet` and `../killMS` tag histories. With the `dev` group
+installed:
+
+```sh
+invoke version                 # current pins vs the latest upstream tags
+invoke changelog               # preview the generated changelog
+invoke release --dry-run       # show the complete plan; change nothing
+invoke release --part patch    # bump, test, build, publish, GitHub release
+```
+
+`invoke release` updates the cab image pins and the README, inserts the
+generated changelog, bumps `pyproject.toml` and `uv.lock`, runs the tests and
+`uv build`, pushes `main` and the annotated tag (which triggers the PyPI
+workflow), waits for the publish to appear on PyPI, and creates the GitHub
+release with the wheel and sdist attached. Use `--yes` for non-interactive
+runs and `--allow-same` when only packaging changes need releasing. The
+script refuses to run on a dirty tree or when the version/tag already exists.
+
+### Manual release
+
 1. Register the pending publisher on PyPI (once):
    [pypi.org/manage/account/publishing](https://pypi.org/manage/account/publishing/)
    with owner `tmolteno`, repository `dde-cargo`, workflow `publish_pypi.yaml`,
@@ -102,6 +125,7 @@ the publish is live at [pypi.org/project/dde-cargo](https://pypi.org/project/dde
 uv sync --all-groups
 uv run pytest          # schema contracts for the packaged cabs
 uv build               # wheel + sdist into dist/
+invoke --list          # release tasks: version, changelog, release
 ```
 
 An end-to-end smoke check (loads the cabs through stimela's real spec loader,
