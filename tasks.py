@@ -294,7 +294,7 @@ def _changelog_section(
         "",
         f"- DDFacet `ghcr.io/tmolteno/ddfacet:{ddfacet_old}` → `{ddfacet_new}`.",
         f"- killMS `ghcr.io/tmolteno/killms:{killms_old}` → `{killms_new}`.",
-        "- Image pins updated in the packaged cabs and the README.",
+        "- Image pins kept in sync across the packaged cabs and the README.",
         "",
     ]
     lines.extend(_upstream_section("DDFacet", DDFACET_REPO, ddfacet_old, ddfacet_new))
@@ -446,6 +446,13 @@ def _remote_tag_exists(tag: str) -> bool:
     except ProcessExecutionError as exc:
         raise RuntimeError(f"cannot read {REMOTE_URL}: {exc}") from exc
     return bool(out.strip())
+
+
+def _local_tag_exists(tag: str) -> bool:
+    rc, _, _ = local["git"][
+        ("-C", str(ROOT), "rev-parse", "--verify", "-q", f"refs/tags/{tag}")
+    ].run(retcode=None)
+    return rc == 0
 
 
 def _wait_for_publish(tag: str, commit: str, timeout_s: int = 900) -> None:
@@ -659,8 +666,8 @@ def release(
 
         _require_tools("gh")
         tag = f"v{plan['package_new']}"
-        if _remote_tag_exists(tag):
-            raise RuntimeError(f"{tag} already exists on {REMOTE_URL}")
+        if _local_tag_exists(tag) or _remote_tag_exists(tag):
+            raise RuntimeError(f"{tag} already exists (local or on {REMOTE_URL})")
 
         if not yes:
             print(f"About to release dde-cargo {plan['package_new']} as {tag}.")
