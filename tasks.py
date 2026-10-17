@@ -364,7 +364,7 @@ def _changelog_entry(version: str) -> str:
     """The final `## [version]` section, including any Unreleased notes."""
     text = CHANGELOG.read_text()
     match = re.search(
-        rf"(?ms)^## \[{re.escape(version)}\].*?(?=^## \[|\Z)", text
+        rf"(?ms)^## \[{re.escape(version)}\].*?(?=^## \[|^\[[^\]]+\]: |\Z)", text
     )
     if not match:
         raise RuntimeError(f"{CHANGELOG}: no section for [{version}]")
