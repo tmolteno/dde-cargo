@@ -1,4 +1,7 @@
 # dde-cargo
+
+[![PyPI](https://img.shields.io/pypi/v/dde-cargo.svg)](https://pypi.org/project/dde-cargo/)
+
 Stimela cabs for DDFacet/Killms on both arm64 and x86-64 systems.
 
 The cab YAMLs in `dde_cargo/` are verbatim copies of `meerkat_imaging/cabs/`
@@ -88,24 +91,9 @@ with `uv`, and publishes from the `pypi` environment.
 
 ### Automated release
 
-`tasks.py` (an invoke/plumbum script) drives the whole release from the
-sibling `../DDFacet` and `../killMS` tag histories. With the `dev` group
-installed:
-
-```sh
-invoke version                 # current pins vs the latest upstream tags
-invoke changelog               # preview the generated changelog
-invoke release --dry-run       # show the complete plan; change nothing
-invoke release --part patch    # bump, test, build, publish, GitHub release
-```
-
-`invoke release` updates the cab image pins and the README, inserts the
-generated changelog, bumps `pyproject.toml` and `uv.lock`, runs the tests and
-`uv build`, pushes `main` and the annotated tag (which triggers the PyPI
-workflow), waits for the publish to appear on PyPI, and creates the GitHub
-release with the wheel and sdist attached. Use `--yes` for non-interactive
-runs and `--allow-same` when only packaging changes need releasing. The
-script refuses to run on a dirty tree or when the version/tag already exists.
+`invoke release` drives the tag, PyPI publish and GitHub release end to end.
+See [Release automation](#release-automation) under Development for the full
+task reference and prerequisites.
 
 ### Manual release
 
@@ -137,3 +125,71 @@ uv run stimela run /tmp/dde-cargo-smoke.yml dde-cargo-smoke -d
 
 with `/tmp/dde-cargo-smoke.yml` any recipe that `_include`s the package as
 shown above and runs one or two of the cabs.
+
+### Release automation
+
+`tasks.py` is an [invoke](https://www.pyinvoke.org/) +
+[plumbum](https://plumbum.readthedocs.io/) script that automates a release
+from the sibling `../DDFacet` and `../killMS` repositories. It reads the
+current image pins, resolves the latest upstream release tags, and generates
+the changelog from the commits between those tags.
+
+Prerequisites:
+
+* the `dev` dependency group — `uv sync --all-groups` installs `invoke` and
+  `plumbum`;
+* `uv` and an authenticated `gh` (the PyPI workflow uses OIDC, so no API token
+  is involved);
+* `../DDFacet` and `../killMS` checkouts containing their `vX.Y.Z` release
+  tags — override the paths with `DDFACET_REPO` and `KILLMS_REPO`;
+* a clean `main` branch, with the package version not yet tagged or published.
+
+Available tasks:
+
+```sh
+invoke --list                  # show the available release tasks
+invoke version                 # package version and pinned/latest image tags
+invoke changelog               # print the next release's changelog section
+invoke changelog --allow-same  # ... even when no image tag has moved
+invoke release --dry-run       # show the complete plan; change nothing
+invoke release --part patch    # the real release
+```
+
+`invoke version` reports the package version, the DDFacet/killMS tags currently
+pinned by the cabs, and the latest tags in the upstream checkouts.
+
+`invoke changelog` prints the section that would be inserted into
+`CHANGELOG.md`. It groups the upstream commits per release tag (for example
+`v0.16.2` … `v0.16.6`) and notes killMS releases that are rebuilds on a new
+DDFacet image.
+
+`invoke release` performs the complete chain:
+
+1. generates and inserts the changelog section, keeping any `[Unreleased]`
+   notes;
+2. bumps `version` in `pyproject.toml`, refreshes `uv.lock`, and updates the
+   DDFacet/killMS pins in the cab YAMLs and the image table above;
+3. runs the test suite and `uv build`;
+4. commits the changes, creates an annotated `vX.Y.Z` tag, and pushes `main`
+   and the tag;
+5. waits for the tag's `publish_pypi.yaml` workflow to succeed and verifies
+   that the version is live on PyPI;
+6. creates the GitHub release with the generated notes and the built wheel and
+   sdist attached.
+
+Options:
+
+* `--part patch|minor|major` — which part of the package version to bump
+  (default `patch`);
+* `--ddfacet-tag` / `--killms-tag` — override the upstream target tags
+  (default: the latest release tag in each checkout);
+* `--allow-same` — release packaging-only changes when both images are already
+  at the pinned tags;
+* `--fetch` / `--no-fetch` — fetch upstream tags first (default: fetch, falling
+  back to the local tags with a warning if the remotes are unreachable);
+* `--yes` — skip the confirmation prompt;
+* `--dry-run` — print the plan and generated changelog without changing,
+  committing or publishing anything.
+
+The script refuses to run on a dirty tree, from a branch other than `main`, or
+when the target tag or PyPI version already exists. It never force-pushes.
