@@ -2,7 +2,8 @@
 
 [![PyPI](https://img.shields.io/pypi/v/dde-cargo.svg)](https://pypi.org/project/dde-cargo/)
 
-Stimela cabs for DDFacet/Killms on both arm64 and x86-64 systems.
+[Stimela](https://github.com/caracal-pipeline/stimela) cabs for
+DDFacet/Killms on both arm64 and x86-64 systems.
 
 The cab YAMLs in `dde_cargo/` are verbatim copies of `meerkat_imaging/cabs/`
 (`ddfacet.yml`, its two `_include`d parameter schemas, and the two
