@@ -5,7 +5,10 @@ These tests exercise the pure planning and rewriting helpers only; the
 upstream repositories and GitHub are mocked or replaced with temporary files.
 """
 
+import json
 from pathlib import Path
+
+import pytest
 
 import tasks
 
@@ -76,42 +79,139 @@ def test_upstream_section_lists_commits_and_rebuilds(monkeypatch):
     assert "- Rebuilt on DDFacet `v1.0.0`; no source changes." in text
 
 
-def test_update_pins_rewrites_cabs_and_readme(tmp_path, monkeypatch):
-    cabs = tmp_path / "dde_cargo"
-    cabs.mkdir()
-    ddfacet = cabs / "ddfacet.yml"
-    ddfacet.write_text(
-        "vars:\n"
-        "  tim-molteno:\n"
-        "    images:\n"
-        "      version: v0.16.1\n"
-        "cabs:\n"
-        "  killms:\n"
-        "    image:\n"
-        "      version: v3.15.3\n"
+def _write_cabs(directory, ddfacet, killms):
+    directory.mkdir(exist_ok=True)
+    (directory / "ddfacet.yml").write_text(
+        "vars:\n  tim-molteno:\n    images:\n      version: %s\n"
+        "cabs:\n  killms:\n    image:\n      version: %s\n" % (ddfacet, killms)
     )
-    ddfacet_mp = cabs / "ddfacet-memory-plan.yml"
-    ddfacet_mp.write_text(
-        "vars:\n  ddfacet-memory-plan:\n    image:\n      version: v0.16.1\n"
+    (directory / "ddfacet-memory-plan.yml").write_text(
+        "vars:\n  ddfacet-memory-plan:\n    image:\n      version: %s\n" % ddfacet
     )
-    killms_mp = cabs / "killms-memory-plan.yml"
-    killms_mp.write_text(
-        "vars:\n  killms-memory-plan:\n    image:\n      version: v3.15.3\n"
+    (directory / "killms-memory-plan.yml").write_text(
+        "vars:\n  killms-memory-plan:\n    image:\n      version: %s\n" % killms
     )
-    readme = tmp_path / "README.md"
-    readme.write_text(
-        "| ddfacet | ghcr.io/tmolteno/ddfacet:v0.16.1 |\n"
-        "| killms | ghcr.io/tmolteno/killms:v3.15.3 |\n"
-    )
+    for name in tasks.SYNC_FILES[3:]:
+        (directory / name).write_text("# schema\n")
 
-    monkeypatch.setattr(tasks, "DDFACET_YML", ddfacet)
-    monkeypatch.setattr(tasks, "DDFACET_MP_YML", ddfacet_mp)
-    monkeypatch.setattr(tasks, "KILLMS_MP_YML", killms_mp)
-    monkeypatch.setattr(tasks, "README", readme)
 
-    tasks._update_pins("v0.16.1", "v0.16.2", "v3.15.3", "v3.15.4")
-    tasks._verify_pins("v0.16.2", "v3.15.4")
+def _git_init(path):
+    import subprocess
 
+    for argv in (["init", "-q", "-b", "main"], ["config", "user.email", "t@t"], ["config", "user.name", "t"]):
+        subprocess.run(["git", "-C", str(path), *argv], check=True)
+
+
+def _commit(path, message):
+    import subprocess
+
+    subprocess.run(["git", "-C", str(path), "add", "-A"], check=True)
+    subprocess.run(["git", "-C", str(path), "commit", "-q", "-m", message], check=True)
+    return subprocess.run(
+        ["git", "-C", str(path), "rev-parse", "HEAD"], check=True, capture_output=True, text=True
+    ).stdout.strip()
+
+
+def _fake_world(tmp_path, monkeypatch, meerkat_pins=("v0.16.2", "v3.15.4")):
+    """A tiny dde-cargo repo (pins v0.16.1/v3.15.3, released) and a meerkat_imaging repo beside it."""
+    mine, meerkat = tmp_path / "dde-cargo", tmp_path / "meerkat_imaging"
+    pkg = mine / "dde_cargo"
+    mine.mkdir()
+    meerkat.mkdir()
+    _git_init(mine)
+    _git_init(meerkat)
+    _write_cabs(pkg, "v0.16.1", "v3.15.3")
+    (mine / "README.md").write_text(
+        "| ddfacet | ghcr.io/tmolteno/ddfacet:v0.16.1 |\n| killms | ghcr.io/tmolteno/killms:v3.15.3 |\n"
+    )
+    _write_cabs(meerkat / "cabs", "v0.16.1", "v3.15.3")
+    first = _commit(meerkat, "initial cabs")
+    monkeypatch.setattr(tasks, "ROOT", mine)
+    monkeypatch.setattr(tasks, "PACKAGE_DIR", pkg)
+    monkeypatch.setattr(tasks, "SYNC_RECORD", pkg / "meerkat-sync.json")
+    monkeypatch.setattr(tasks, "MEERKAT_REPO", meerkat)
+    monkeypatch.setattr(tasks, "README", mine / "README.md")
+    monkeypatch.setattr(tasks, "DDFACET_YML", pkg / "ddfacet.yml")
+    monkeypatch.setattr(tasks, "DDFACET_MP_YML", pkg / "ddfacet-memory-plan.yml")
+    monkeypatch.setattr(tasks, "KILLMS_MP_YML", pkg / "killms-memory-plan.yml")
+    tasks._apply_sync(first)
+    _commit(mine, "release 0.1.0")  # the committed record is the previous release's sync
+    _write_cabs(meerkat / "cabs", *meerkat_pins)
+    (meerkat / "cabs" / "killms-memory-plan.yml").write_text(
+        (meerkat / "cabs" / "killms-memory-plan.yml").read_text() + "# a planner change\n"
+    )
+    second = _commit(meerkat, "memplan: calibrated planner")
+    return mine, meerkat, first, second
+
+
+def test_sync_copies_cabs_records_commit_and_updates_readme(tmp_path, monkeypatch):
+    mine, meerkat, first, second = _fake_world(tmp_path, monkeypatch)
+    assert tasks._recorded_commit() == first
+    assert tasks._require_meerkat() == second
+    assert "killms-memory-plan.yml" in tasks._sync_changed_files()
+
+    changed = tasks._apply_sync(second)
+
+    assert "ddfacet.yml" in changed
     assert tasks._pinned_versions() == ("v0.16.2", "v3.15.4")
-    assert "v0.16.1" not in readme.read_text()
-    assert "v3.15.3" not in readme.read_text()
+    record = json.loads((mine / "dde_cargo" / "meerkat-sync.json").read_text())
+    assert record["meerkat_imaging_commit"] == second
+    assert record["files"]["ddfacet.yml"] == tasks._sha256(mine / "dde_cargo" / "ddfacet.yml")
+    readme = (mine / "README.md").read_text()
+    assert "ddfacet:v0.16.2" in readme and "killms:v3.15.4" in readme and "v0.16.1" not in readme
+    tasks._verify_pins("v0.16.2", "v3.15.4")
+    assert tasks._sync_changed_files() == []
+    # the committed pins (what the last release shipped) are still the old ones
+    assert tasks._committed_pins() == ("v0.16.1", "v3.15.3")
+
+
+def test_sync_refuses_uncommitted_cab_changes(tmp_path, monkeypatch):
+    mine, meerkat, first, second = _fake_world(tmp_path, monkeypatch)
+    (meerkat / "cabs" / "ddfacet.yml").write_text("# edited, not committed\n")
+    with pytest.raises(RuntimeError, match="uncommitted cab changes"):
+        tasks._require_meerkat()
+
+
+def test_release_refuses_cabs_that_pin_other_images(tmp_path, monkeypatch):
+    _fake_world(tmp_path, monkeypatch)
+    tasks._verify_sync_pins("v0.16.2", "v3.15.4")  # the meerkat cabs pin exactly these
+    with pytest.raises(RuntimeError, match="Refusing to publish cabs that pin other images"):
+        tasks._verify_sync_pins("v0.16.3", "v3.15.4")
+    with pytest.raises(RuntimeError, match="killMS v3.15.4"):
+        tasks._verify_sync_pins("v0.16.2", "v3.15.5")
+
+
+def test_cab_changes_section_lists_meerkat_cab_commits(tmp_path, monkeypatch):
+    mine, meerkat, first, second = _fake_world(tmp_path, monkeypatch)
+    text = "\n".join(tasks._cab_changes_section(first, second))
+    assert "### Cab changes (meerkat_imaging)" in text
+    assert "memplan: calibrated planner" in text and second[:7] in text
+    assert "First sync" in "\n".join(tasks._cab_changes_section(None, second))
+    assert "No cab changes" in "\n".join(tasks._cab_changes_section(second, second))
+
+
+def test_plan_includes_cab_changes_and_verifies_pins(tmp_path, monkeypatch):
+    mine, meerkat, first, second = _fake_world(tmp_path, monkeypatch)
+    monkeypatch.setattr(tasks, "_fetch_tags", lambda repo: None)
+    monkeypatch.setattr(tasks, "DDFACET_REPO", tmp_path / "ddf")
+    monkeypatch.setattr(tasks, "KILLMS_REPO", tmp_path / "kms")
+    (tmp_path / "ddf" / ".git").mkdir(parents=True)
+    (tmp_path / "kms" / ".git").mkdir(parents=True)
+    (mine / "pyproject.toml").write_text('[project]\nversion = "0.1.1"\n')
+    monkeypatch.setattr(tasks, "PYPROJECT", mine / "pyproject.toml")
+    monkeypatch.setattr(tasks, "_release_tags", lambda repo: ["v0.16.1", "v0.16.2"] if repo.name == "ddf" else ["v3.15.3", "v3.15.4"])
+    monkeypatch.setattr(tasks, "_tag_date", lambda repo, tag: "2026-01-01")
+    monkeypatch.setattr(tasks, "_commits_between", lambda repo, old, new: [("abc", "upstream fix")])
+
+    plan = tasks._plan("minor", fetch=False)
+
+    assert plan["package_new"] == "0.2.0"
+    assert (plan["ddfacet_old"], plan["ddfacet_new"]) == ("v0.16.1", "v0.16.2")
+    assert plan["meerkat_old"] == first and plan["meerkat_new"] == second
+    assert "memplan: calibrated planner" in plan["section"]
+    assert "upstream fix" in plan["section"]
+
+    # an upstream tag that the synced cabs do not pin is refused
+    monkeypatch.setattr(tasks, "_release_tags", lambda repo: ["v0.16.1", "v0.16.2", "v0.16.3"] if repo.name == "ddf" else ["v3.15.3", "v3.15.4"])
+    with pytest.raises(RuntimeError, match="pin DDFacet v0.16.2"):
+        tasks._plan("minor", fetch=False)

@@ -96,7 +96,10 @@ steps:
 Only `ddfacet.yml` is essential; the memory-plan files are optional extras
 (wire them ahead of a step as shown in their header comments — e.g.
 `ddfacet-memory-plan` suggests `Parallel.NCPU`, `Data.ChunkHours` and
-`Selection.ChanStep` for the imaging step that follows).
+`Selection.ChanStep` for the imaging step that follows).  They are
+self-contained: the calibrated model and its tessellation code are inlined in
+the cab's python-code command, so they need no `Lib`/`ModelFile` input and no
+meerkat_imaging checkout (`tests/test_sync.py` keeps it that way).
 
 Notes carried over from the upstream cab comments:
 
@@ -155,13 +158,38 @@ uv run stimela run /tmp/dde-cargo-smoke.yml dde-cargo-smoke -d
 with `/tmp/dde-cargo-smoke.yml` any recipe that `_include`s the package as
 shown above and runs one or two of the cabs.
 
+### Where the cabs are edited: `invoke sync`
+
+The cab YAMLs and schemas in `dde_cargo/` are **not edited in this repository**.
+Their source is [meerkat_imaging](https://github.com/tmolteno/meerkat_imaging)'s
+`cabs/` directory (where the pipeline runs and tests them):
+
+| meerkat_imaging `cabs/` | here |
+|---|---|
+| `ddfacet.yml`, `ddfacet_stimela_inputs_schema.yml`, `killms_stimela_schema.yml` | same names in `dde_cargo/` |
+| `ddfacet-memory-plan.yml`, `killms-memory-plan.yml` (generated there from `*.yml.in`, `tools/memplan_lib.py` and `memplan-model.json` by `tools/build-memplan-cabs.py`) | same names |
+
+```sh
+invoke sync                    # copy the five files from ../meerkat_imaging (MEERKAT_REPO to override)
+invoke sync --check            # exit 1 if dde_cargo/ differs
+```
+
+`sync` refuses when those files have uncommitted changes in meerkat_imaging (or
+its generated cabs are stale), copies them, and records the meerkat_imaging
+commit and the files' hashes in `dde_cargo/meerkat-sync.json`
+(`tests/test_sync.py` fails if a packaged file is edited by hand).  `release`
+runs `sync` first.
+
 ### Release automation
 
 `tasks.py` is an [invoke](https://www.pyinvoke.org/) +
 [plumbum](https://plumbum.readthedocs.io/) script that automates a release
-from the sibling `../DDFacet` and `../killMS` repositories. It reads the
-current image pins, resolves the latest upstream release tags, and generates
-the changelog from the commits between those tags.
+from the sibling `../DDFacet`, `../killMS` and `../meerkat_imaging`
+repositories. It syncs the cabs from meerkat_imaging, resolves the latest
+upstream release tags, **verifies that the synced cabs pin exactly those
+tags** (it refuses, with a message, instead of rewriting a pin), and generates
+the changelog from the upstream commits between the old and new tags plus
+meerkat_imaging's commits to the cab files since the previously synced commit.
 
 Prerequisites:
 
@@ -170,7 +198,9 @@ Prerequisites:
 * `uv` and an authenticated `gh` (the PyPI workflow uses OIDC, so no API token
   is involved);
 * `../DDFacet` and `../killMS` checkouts containing their `vX.Y.Z` release
-  tags — override the paths with `DDFACET_REPO` and `KILLMS_REPO`;
+  tags, and a `../meerkat_imaging` checkout with the cabs committed (and their
+  pins at those tags) — override the paths with `DDFACET_REPO`, `KILLMS_REPO`
+  and `MEERKAT_REPO`;
 * a clean `main` branch, with the package version not yet tagged or published.
 
 Available tasks:
@@ -182,9 +212,28 @@ invoke changelog               # print the next release's changelog section
 invoke changelog --allow-same  # ... even when no image tag has moved
 invoke docs                    # regenerate docs/cabs.md
 invoke docs --check            # verify docs/cabs.md is current
+invoke sync                    # copy the cabs from meerkat_imaging
 invoke release --dry-run       # show the complete plan; change nothing
 invoke release --part patch    # the real release
+invoke release --part minor    # ... when a cab interface changed (0.1.1 -> 0.2.0)
 ```
+
+Use `--part minor` whenever a cab's inputs or outputs changed (or an input was
+removed, as the memory-plan cabs' `Lib`/`ModelFile` were for 0.2.0); `patch`
+(the default) for pin bumps and internal fixes.  `--allow-same` releases when
+nothing changed (no new pins, cabs or commits).
+
+#### The release order
+
+Normally nobody runs this by hand: meerkat_imaging's `invoke release` does,
+after DDFacet and killMS are tagged and their images are live:
+
+1. meerkat_imaging commits its updated cab pins (and regenerated memory-plan cabs);
+2. it runs `invoke release --part <patch|minor> --yes` here (path: `DDE_CARGO_REPO`);
+3. this release syncs the cabs, checks the pins, publishes to PyPI and creates
+   the GitHub release, and exits non-zero unless the version is live on PyPI;
+4. meerkat_imaging bumps its `dde-cargo==X.Y.Z` pin and makes one
+   `pins: ddfacet vA, killms vB, dde-cargo vC` commit.
 
 `invoke version` reports the package version, the DDFacet/killMS tags currently
 pinned by the cabs, and the latest tags in the upstream checkouts.

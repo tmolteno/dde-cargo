@@ -10,6 +10,18 @@ DDFacet's `CHANGES.md` and commit history, killMS's commit history, and
 
 ## [Unreleased]
 
+### Changed
+
+- The cab files are synced from `meerkat_imaging/cabs` (`invoke sync`, run first by
+  `invoke release`; recorded in `dde_cargo/meerkat-sync.json`) instead of being
+  copied by hand.  The release refuses when the synced cabs do not pin the latest
+  DDFacet/killMS tags, and lists meerkat_imaging's cab commits in the changelog.
+- **Memory-plan cabs replaced by the calibrated planners** (meerkat_imaging#15): new
+  `Step`, `NDirections`, `Prefer`, `Mode` ... inputs and outputs, and a different
+  model.  They are self-contained: the model code and coefficients are inlined, with
+  no `Lib` / `ModelFile` host-file inputs (so they work from a pip install).  This is
+  an interface change, hence the 0.2.0 (minor) release.
+
 ### Added
 
 - `tasks.py`: invoke/plumbum release automation. It generates the changelog

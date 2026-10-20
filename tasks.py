@@ -1,36 +1,51 @@
 # Copyright (c) 2026 Tim Molteno (tim@elec.ac.nz)
 """Release orchestration for dde-cargo.
 
-The release is driven by the image pins in ``dde_cargo/ddfacet.yml`` and the
-tag history of the sibling ``../DDFacet`` and ``../killMS`` checkouts:
+The cab files are NOT edited here: ``dde_cargo/{ddfacet,ddfacet-memory-plan,
+killms-memory-plan}.yml`` and the two schema files are copied from the sibling
+``../meerkat_imaging`` checkout (``cabs/``, override ``MEERKAT_REPO``) by
+``invoke sync``, which ``release`` runs first.  The release is driven by those
+cabs' image pins (which must equal the latest tags of the sibling ``../DDFacet``
+and ``../killMS`` checkouts -- the release refuses otherwise):
 
     invoke version                     # current package + pinned/upstream tags
+    invoke sync                        # copy the cabs from meerkat_imaging
+    invoke sync --check                # verify dde_cargo/ matches meerkat_imaging
     invoke changelog                   # print the next release's changelog
     invoke changelog --allow-same      # ... even when no image tag moved
     invoke docs                        # regenerate docs/cabs.md
     invoke docs --check                # verify docs/cabs.md is current
     invoke release --dry-run           # show the complete release plan
-    invoke release --part patch --yes  # bump, test, build, tag, publish, release
+    invoke release --part patch --yes  # sync, bump, test, build, tag, publish, release
 
 ``release`` performs the whole chain:
 
-1. reads the old DDFacet/killMS pins and the latest upstream release tags;
-2. generates a changelog section from the upstream commit history between
-   those tags and inserts it into ``CHANGELOG.md``;
-3. bumps this package's version (patch by default) and updates every image
-   pin in the cab YAMLs and the README;
-4. regenerates ``docs/cabs.md`` from the packaged YAMLs;
-5. runs ``uv lock``, the test suite and ``uv build``;
-6. commits, creates an annotated ``vX.Y.Z`` tag and pushes both to GitHub --
+1. checks that meerkat_imaging's cab files are committed, reads the old
+   (committed) DDFacet/killMS pins, the latest upstream release tags, and
+   REFUSES when the cabs to be synced do not pin exactly those tags;
+2. syncs the five cab files from meerkat_imaging into ``dde_cargo/`` and records
+   the meerkat_imaging commit (``dde_cargo/meerkat-sync.json``);
+3. generates a changelog section from the upstream commit history between the
+   old and new tags plus meerkat_imaging's cab commits since the previously
+   synced commit, and inserts it into ``CHANGELOG.md``;
+4. bumps this package's version (patch by default; pass ``--part minor`` when
+   a cab interface changed) and updates the image pins in the README;
+5. regenerates ``docs/cabs.md`` from the packaged YAMLs;
+6. runs ``uv lock``, the test suite and ``uv build``;
+7. commits, creates an annotated ``vX.Y.Z`` tag and pushes both to GitHub --
    the tag push triggers ``.github/workflows/publish_pypi.yaml``;
-7. waits for that workflow to succeed and verifies the version is on PyPI;
-8. creates the GitHub release with the generated notes and the built wheel
+8. waits for that workflow to succeed and verifies the version is on PyPI;
+9. creates the GitHub release with the generated notes and the built wheel
    and sdist attached.
 
+meerkat_imaging's own ``invoke release`` runs this task (``--part patch`` by
+default, ``--dde-cargo-part``) after DDFacet and killMS are published.
+
 Requirements: ``invoke`` and ``plumbum`` (the ``dev`` dependency group),
-``uv``, ``gh`` authenticated to GitHub, and the sibling ``DDFacet`` and
-``killMS`` checkouts with their release tags.  The upstream path defaults can
-be overridden with ``DDFACET_REPO`` and ``KILLMS_REPO``.
+``uv``, ``gh`` authenticated to GitHub, and the sibling ``DDFacet``,
+``killMS`` and ``meerkat_imaging`` checkouts (release tags in the first two).  The
+path defaults can be overridden with ``DDFACET_REPO``, ``KILLMS_REPO`` and
+``MEERKAT_REPO``.
 
 The script never force-pushes and refuses to run on a dirty tree or when the
 target tag/version already exists.  Use ``--dry-run`` first; it changes
@@ -39,10 +54,12 @@ nothing.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
 import shutil
+import subprocess
 import sys
 import tempfile
 import time
@@ -62,6 +79,7 @@ os.environ.setdefault("GIT_TERMINAL_PROMPT", "0")
 ROOT = Path(__file__).resolve().parent
 DDFACET_REPO = Path(os.environ.get("DDFACET_REPO", ROOT.parent / "DDFacet")).expanduser()
 KILLMS_REPO = Path(os.environ.get("KILLMS_REPO", ROOT.parent / "killMS")).expanduser()
+MEERKAT_REPO = Path(os.environ.get("MEERKAT_REPO", ROOT.parent / "meerkat_imaging")).expanduser()
 GH_REPO = os.environ.get("DDE_CARGO_GH_REPO", "tmolteno/dde-cargo")
 REMOTE_URL = os.environ.get("DDE_CARGO_REMOTE", f"https://github.com/{GH_REPO}.git")
 WORKFLOW = "publish_pypi.yaml"
@@ -71,6 +89,17 @@ README = ROOT / "README.md"
 DDFACET_YML = ROOT / "dde_cargo" / "ddfacet.yml"
 DDFACET_MP_YML = ROOT / "dde_cargo" / "ddfacet-memory-plan.yml"
 KILLMS_MP_YML = ROOT / "dde_cargo" / "killms-memory-plan.yml"
+
+PACKAGE_DIR = ROOT / "dde_cargo"
+SYNC_RECORD = PACKAGE_DIR / "meerkat-sync.json"
+# the files copied from meerkat_imaging/cabs into dde_cargo/ (never edited here)
+SYNC_FILES = (
+    "ddfacet.yml",
+    "ddfacet-memory-plan.yml",
+    "killms-memory-plan.yml",
+    "ddfacet_stimela_inputs_schema.yml",
+    "killms_stimela_schema.yml",
+)
 
 VERSION_RE = re.compile(r"^v?(\d+(?:\.\d+)+)$")
 RELEASE_TAG_RE = re.compile(r"^v\d+(?:\.\d+)+$")
@@ -165,22 +194,39 @@ def _next_version(version: str, part: str) -> str:
     raise RuntimeError(f"--part must be patch, minor or major, not {part!r}")
 
 
-def _pinned_versions() -> tuple[str, str]:
-    """The DDFacet and killMS tags pinned by the packaged cabs."""
-    doc = yaml.safe_load(DDFACET_YML.read_text())
+def _pins_from_texts(ddfacet_text: str, ddfacet_mp_text: str, killms_mp_text: str, where: str) -> tuple[str, str]:
+    doc = yaml.safe_load(ddfacet_text)
     try:
         ddfacet = doc["vars"]["tim-molteno"]["images"]["version"]
         killms = doc["cabs"]["killms"]["image"]["version"]
     except (KeyError, TypeError) as exc:
-        raise RuntimeError(f"{DDFACET_YML}: cannot read the image pins") from exc
-    ddfacet_mp = yaml.safe_load(DDFACET_MP_YML.read_text())["vars"]["ddfacet-memory-plan"]["image"]["version"]
-    killms_mp = yaml.safe_load(KILLMS_MP_YML.read_text())["vars"]["killms-memory-plan"]["image"]["version"]
+        raise RuntimeError(f"{where}/ddfacet.yml: cannot read the image pins") from exc
+    ddfacet_mp = yaml.safe_load(ddfacet_mp_text)["vars"]["ddfacet-memory-plan"]["image"]["version"]
+    killms_mp = yaml.safe_load(killms_mp_text)["vars"]["killms-memory-plan"]["image"]["version"]
     if ddfacet_mp != ddfacet or killms_mp != killms:
         raise RuntimeError(
-            "memory-plan pins disagree with ddfacet.yml: "
+            f"memory-plan pins disagree with ddfacet.yml in {where}: "
             f"ddfacet {ddfacet!r}/{ddfacet_mp!r}, killms {killms!r}/{killms_mp!r}"
         )
     return str(ddfacet), str(killms)
+
+
+def _pinned_versions(base: Path | None = None) -> tuple[str, str]:
+    """The DDFacet and killMS tags pinned by the cabs in `base` (default: the packaged cabs)."""
+    if base is None:
+        files = (DDFACET_YML, DDFACET_MP_YML, KILLMS_MP_YML)
+    else:
+        files = tuple(base / name for name in SYNC_FILES[:3])
+    return _pins_from_texts(*(f.read_text() for f in files), where=str(base or PACKAGE_DIR))
+
+
+def _committed_pins() -> tuple[str, str]:
+    """The pins in the last commit (what the previous release shipped); the working tree if HEAD has none."""
+    try:
+        texts = [_git(ROOT, "show", f"HEAD:dde_cargo/{name}") for name in SYNC_FILES[:3]]
+    except RuntimeError:
+        return _pinned_versions()
+    return _pins_from_texts(*texts, where="HEAD:dde_cargo")
 
 
 def _release_tags(repo: Path) -> list[str]:
@@ -247,6 +293,128 @@ def _tag_subject(repo: Path, tag: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# syncing the cabs from meerkat_imaging
+
+
+def _meerkat_cab(name: str) -> Path:
+    return MEERKAT_REPO / "cabs" / name
+
+
+def _sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _require_meerkat() -> str:
+    """Check that the cab files in meerkat_imaging are committed and current; return its HEAD commit."""
+    if not (MEERKAT_REPO / ".git").exists():
+        raise RuntimeError(f"meerkat_imaging repository not found at {MEERKAT_REPO} (set MEERKAT_REPO)")
+    missing = [name for name in SYNC_FILES if not _meerkat_cab(name).is_file()]
+    if missing:
+        raise RuntimeError(f"{MEERKAT_REPO}/cabs lacks {', '.join(missing)}")
+    dirty = _git(MEERKAT_REPO, "status", "--porcelain", "--", *[f"cabs/{name}" for name in SYNC_FILES])
+    if dirty:
+        raise RuntimeError(
+            f"uncommitted cab changes in {MEERKAT_REPO}; commit them first so the recorded commit is the "
+            f"synced content:\n{dirty}"
+        )
+    builder = MEERKAT_REPO / "tools" / "build-memplan-cabs.py"
+    if builder.is_file():
+        proc = subprocess.run(
+            [sys.executable, str(builder), "--check"], cwd=MEERKAT_REPO, text=True, capture_output=True
+        )
+        if proc.returncode != 0:
+            raise RuntimeError(
+                "meerkat_imaging's generated memory-plan cabs are stale "
+                "(run tools/build-memplan-cabs.py there and commit):\n" + (proc.stdout + proc.stderr).strip()
+            )
+    return _git(MEERKAT_REPO, "rev-parse", "HEAD")
+
+
+def _recorded_commit() -> str | None:
+    """The meerkat_imaging commit the LAST RELEASE synced from (the record committed at HEAD)."""
+    try:
+        return json.loads(_git(ROOT, "show", "HEAD:dde_cargo/meerkat-sync.json"))["meerkat_imaging_commit"]
+    except (RuntimeError, ValueError, KeyError):
+        return None
+
+
+def _sync_changed_files() -> list[str]:
+    return [
+        name
+        for name in SYNC_FILES
+        if not (PACKAGE_DIR / name).is_file()
+        or (PACKAGE_DIR / name).read_bytes() != _meerkat_cab(name).read_bytes()
+    ]
+
+
+def _verify_sync_pins(ddfacet: str, killms: str) -> None:
+    """The cabs about to be synced must pin exactly the release's DDFacet and killMS tags."""
+    have = _pinned_versions(MEERKAT_REPO / "cabs")
+    if have != (ddfacet, killms):
+        raise RuntimeError(
+            f"the cabs in {MEERKAT_REPO}/cabs pin DDFacet {have[0]} / killMS {have[1]}, but this release targets "
+            f"DDFacet {ddfacet} / killMS {killms} (the latest tags of {DDFACET_REPO} / {KILLMS_REPO}).\n"
+            "Refusing to publish cabs that pin other images.  Update meerkat_imaging's pins (its `invoke release` "
+            "does, and commits them before calling this) or tag the matching DDFacet/killMS release first."
+        )
+
+
+def _update_readme_pins(ddfacet: str, killms: str) -> None:
+    """Point the README's image table at the pins of the packaged cabs."""
+    text = README.read_text()
+    text = re.sub(r"(ghcr\.io/tmolteno/ddfacet:)v\d+(?:\.\d+)+", rf"\g<1>{ddfacet}", text)
+    text = re.sub(r"(ghcr\.io/tmolteno/killms:)v\d+(?:\.\d+)+", rf"\g<1>{killms}", text)
+    README.write_text(text)
+
+
+def _apply_sync(commit: str) -> list[str]:
+    """Copy the cab files from meerkat_imaging, record the commit, and refresh the README pins."""
+    changed = _sync_changed_files()
+    for name in SYNC_FILES:
+        shutil.copyfile(_meerkat_cab(name), PACKAGE_DIR / name)
+    SYNC_RECORD.write_text(
+        json.dumps(
+            {
+                "meerkat_imaging_commit": commit,
+                "files": {name: _sha256(PACKAGE_DIR / name) for name in SYNC_FILES},
+            },
+            indent=2,
+        )
+        + "\n"
+    )
+    _update_readme_pins(*_pinned_versions())
+    return changed
+
+
+def _cab_changes_section(old: str | None, new: str) -> list[str]:
+    """A Markdown section: meerkat_imaging's commits touching the synced cab files since the last sync."""
+    lines = ["### Cab changes (meerkat_imaging)", ""]
+    short = new[:7]
+    if old is None:
+        return [*lines, f"- First sync from meerkat_imaging `{short}`; no earlier sync to compare against.", ""]
+    if old == new:
+        return [*lines, f"- No cab changes since the last sync (meerkat_imaging `{short}`).", ""]
+    try:
+        raw = _git(
+            MEERKAT_REPO, "log", "--no-merges", "--reverse", "--format=%h%x09%s", f"{old}..{new}",
+            "--", *[f"cabs/{name}" for name in SYNC_FILES],
+        )
+    except RuntimeError:
+        return [*lines, f"- meerkat_imaging `{old[:7]}` → `{short}` (the history between them is not available here).", ""]
+    commits = []
+    for line in raw.splitlines():
+        sha, _, subject = line.partition("\t")
+        # pin bumps are listed under "Container images" already
+        if subject.strip() and not subject.startswith("pins:"):
+            commits.append(f"- {subject.strip()} (`{sha.strip()}`)")
+    lines.append(f"meerkat_imaging `{old[:7]}` → `{short}`:")
+    lines.append("")
+    lines.extend(commits or ["- Image pin updates only."])
+    lines.append("")
+    return lines
+
+
+# ---------------------------------------------------------------------------
 # changelog generation
 
 
@@ -289,6 +457,8 @@ def _changelog_section(
     ddfacet_new: str,
     killms_old: str,
     killms_new: str,
+    meerkat_old: str | None = None,
+    meerkat_new: str | None = None,
 ) -> str:
     lines = [
         f"## [{package_new}] - {date.today().isoformat()}",
@@ -297,17 +467,21 @@ def _changelog_section(
         "",
         f"- DDFacet `ghcr.io/tmolteno/ddfacet:{ddfacet_old}` → `{ddfacet_new}`.",
         f"- killMS `ghcr.io/tmolteno/killms:{killms_old}` → `{killms_new}`.",
-        "- Image pins kept in sync across the packaged cabs and the README.",
+        "- Image pins are those of the cabs synced from meerkat_imaging, equal to the latest upstream tags.",
         "",
     ]
     lines.extend(_upstream_section("DDFacet", DDFACET_REPO, ddfacet_old, ddfacet_new))
     lines.extend(_upstream_section("killMS", KILLMS_REPO, killms_old, killms_new))
+    if meerkat_new is not None:
+        lines.extend(_cab_changes_section(meerkat_old, meerkat_new))
     lines.extend(
         [
             "### Packaging",
             "",
             f"- Package version bumped from `{package_old}` to `{package_new}`.",
-            "- Changelog generated from the `../DDFacet` and `../killMS` commit history.",
+            "- Cabs and schemas synced from `meerkat_imaging/cabs` (`invoke sync`).",
+            "- Changelog generated from the `../DDFacet` and `../killMS` commit history "
+            "and meerkat_imaging's cab history.",
             "",
         ]
     )
@@ -398,31 +572,10 @@ def _replace_once(path: Path, old: str, new: str) -> None:
     path.write_text(text.replace(old, new, 1))
 
 
-def _update_pins(ddfacet_old: str, ddfacet_new: str, killms_old: str, killms_new: str) -> None:
-    if ddfacet_old != ddfacet_new:
-        _replace_once(DDFACET_YML, f"version: {ddfacet_old}", f"version: {ddfacet_new}")
-        _replace_once(DDFACET_MP_YML, f"version: {ddfacet_old}", f"version: {ddfacet_new}")
-        README.write_text(
-            README.read_text().replace(
-                f"ghcr.io/tmolteno/ddfacet:{ddfacet_old}",
-                f"ghcr.io/tmolteno/ddfacet:{ddfacet_new}",
-            )
-        )
-    if killms_old != killms_new:
-        _replace_once(DDFACET_YML, f"version: {killms_old}", f"version: {killms_new}")
-        _replace_once(KILLMS_MP_YML, f"version: {killms_old}", f"version: {killms_new}")
-        README.write_text(
-            README.read_text().replace(
-                f"ghcr.io/tmolteno/killms:{killms_old}",
-                f"ghcr.io/tmolteno/killms:{killms_new}",
-            )
-        )
-
-
 def _verify_pins(ddfacet: str, killms: str) -> None:
     actual = _pinned_versions()
     if actual != (ddfacet, killms):
-        raise RuntimeError(f"pin update failed: expected {(ddfacet, killms)}, found {actual}")
+        raise RuntimeError(f"pin check failed: expected {(ddfacet, killms)}, found {actual}")
     readme = README.read_text()
     for image, tag in (("ddfacet", ddfacet), ("killms", killms)):
         if f"ghcr.io/tmolteno/{image}:{tag}" not in readme:
@@ -541,24 +694,31 @@ def _plan(
 
     package_old = _project_version()
     package_new = _next_version(package_old, part)
-    ddfacet_old, killms_old = _pinned_versions()
+    # "old" is what the last release shipped (the committed cabs), so a sync already applied to the working
+    # tree does not hide the changes; "new" must be what meerkat_imaging's cabs pin.
+    ddfacet_old, killms_old = _committed_pins()
     ddfacet_new = _resolve_target(DDFACET_REPO, "DDFacet", ddfacet_tag)
     killms_new = _resolve_target(KILLMS_REPO, "killMS", killms_tag)
+    meerkat_new = _require_meerkat()
+    meerkat_old = _recorded_commit()
+    _verify_sync_pins(ddfacet_new, killms_new)
+    cabs_changed = _sync_changed_files()
 
     if _version_tuple(ddfacet_new) < _version_tuple(ddfacet_old):
         raise RuntimeError(f"DDFacet target {ddfacet_new} is older than the pin {ddfacet_old}")
     if _version_tuple(killms_new) < _version_tuple(killms_old):
         raise RuntimeError(f"killMS target {killms_new} is older than the pin {killms_old}")
-    if ddfacet_new == ddfacet_old and killms_new == killms_old and not allow_same:
+    cab_commits = meerkat_old != meerkat_new
+    if ddfacet_new == ddfacet_old and killms_new == killms_old and not allow_same and not (cabs_changed or cab_commits):
         raise RuntimeError(
-            "DDFacet and killMS are already at the pinned tags; "
-            "pass --allow-same to release packaging changes only"
+            "DDFacet and killMS are at the pinned tags and the cabs in meerkat_imaging are already released "
+            f"(commit {str(meerkat_old)[:7]}); pass --allow-same to release packaging changes only"
         )
     if check_pypi and _pypi_has_version(package_new):
         raise RuntimeError(f"dde-cargo {package_new} is already on PyPI; bump again")
 
     section = _changelog_section(
-        package_old, package_new, ddfacet_old, ddfacet_new, killms_old, killms_new
+        package_old, package_new, ddfacet_old, ddfacet_new, killms_old, killms_new, meerkat_old, meerkat_new
     )
     return {
         "package_old": package_old,
@@ -567,6 +727,9 @@ def _plan(
         "ddfacet_new": ddfacet_new,
         "killms_old": killms_old,
         "killms_new": killms_new,
+        "meerkat_old": meerkat_old or "",
+        "meerkat_new": meerkat_new,
+        "cabs_changed": ", ".join(cabs_changed) or "(none)",
         "section": section,
     }
 
@@ -578,7 +741,9 @@ def _preflight(require_clean: bool, require_gh: bool = False) -> None:
         _run("gh", "auth", "status")
     branch = _git(ROOT, "rev-parse", "--abbrev-ref", "HEAD")
     if branch != "main":
-        raise RuntimeError(f"release from main, not {branch!r}")
+        if require_clean:  # a real release; a dry run changes nothing, so any branch may show its plan
+            raise RuntimeError(f"release from main, not {branch!r}")
+        print(f"note: on branch {branch!r}; a real release must run from main")
     if require_clean:
         dirty = _git(ROOT, "status", "--porcelain")
         if dirty:
@@ -590,6 +755,8 @@ def _print_plan(plan: dict[str, str]) -> None:
         f"dde-cargo {plan['package_old']} -> {plan['package_new']}\n"
         f"DDFacet    {plan['ddfacet_old']} -> {plan['ddfacet_new']}\n"
         f"killMS     {plan['killms_old']} -> {plan['killms_new']}\n"
+        f"meerkat_imaging cabs {plan['meerkat_old'][:7] or '(first sync)'} -> {plan['meerkat_new'][:7]}"
+        f" (files that differ from dde_cargo/: {plan['cabs_changed']})\n"
     )
 
 
@@ -604,12 +771,46 @@ def version(c) -> None:
     ddfacet, killms = _pinned_versions()
     ddfacet_latest = _latest_tag(DDFACET_REPO)
     killms_latest = _latest_tag(KILLMS_REPO)
+    recorded = _recorded_commit()
+    print(f"meerkat_imaging cabs: synced at {(recorded or 'none')[:7]}, "
+          f"{MEERKAT_REPO} is at {_git(MEERKAT_REPO, 'rev-parse', '--short', 'HEAD')}")
     print(f"DDFacet:   pinned {ddfacet}, latest {ddfacet_latest}")
     print(f"killMS:    pinned {killms}, latest {killms_latest}")
     if (ddfacet, killms) == (ddfacet_latest, killms_latest):
         print("both images are already at the pinned tags (use --allow-same to release packaging only)")
     else:
         print(f"next release targets DDFacet {ddfacet_latest} and killMS {killms_latest}")
+
+
+@task(
+    help={
+        "check": "report (exit 1) when dde_cargo/ differs from meerkat_imaging, copy nothing",
+    }
+)
+def sync(c, check: bool = False) -> None:
+    """Copy the five cab files from meerkat_imaging/cabs into dde_cargo/ and record the commit.
+
+    The cabs are edited in meerkat_imaging (MEERKAT_REPO, default ../meerkat_imaging), never here.  Refuses
+    when those files are uncommitted there.  `release` runs this first; run `invoke docs` after a sync
+    (the release does).
+    """
+    try:
+        commit = _require_meerkat()
+        changed = _sync_changed_files()
+        if check:
+            if changed:
+                print(f"dde_cargo/ differs from {MEERKAT_REPO}/cabs: {', '.join(changed)}")
+                raise SystemExit(1)
+            print(f"dde_cargo/ matches meerkat_imaging {commit[:7]}")
+            return
+        _apply_sync(commit)
+        print(f"synced from meerkat_imaging {commit[:7]} ({MEERKAT_REPO})")
+        print(f"changed: {', '.join(changed) or '(nothing: already identical)'}")
+        ddfacet, killms = _pinned_versions()
+        print(f"pins now: DDFacet {ddfacet}, killMS {killms}")
+    except RuntimeError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        raise SystemExit(1) from exc
 
 
 @task(
@@ -654,10 +855,10 @@ def changelog(
 
 @task(
     help={
-        "part": "version part to bump: patch (default), minor or major",
+        "part": "version part to bump: patch (default), minor (a cab interface changed) or major",
         "ddfacet_tag": "override the DDFacet target tag (default: latest)",
         "killms_tag": "override the killMS target tag (default: latest)",
-        "allow_same": "release even when both images are already at the pins",
+        "allow_same": "release even when nothing (pins, cabs) changed since the last release",
         "fetch": "fetch upstream tags first (default: true)",
         "yes": "do not ask for confirmation",
         "dry_run": "print the plan and changelog, change nothing",
@@ -673,7 +874,7 @@ def release(
     yes: bool = False,
     dry_run: bool = False,
 ) -> None:
-    """Bump, changelog, test, tag, publish to PyPI and create the GitHub release."""
+    """Sync the cabs, bump, changelog, test, tag, publish to PyPI and create the GitHub release."""
     try:
         _preflight(require_clean=not dry_run, require_gh=not dry_run)
         plan = _plan(part, ddfacet_tag, killms_tag, allow_same, fetch, check_pypi=not dry_run)
@@ -699,12 +900,10 @@ def release(
             if answer.strip().lower() not in {"y", "yes"}:
                 raise SystemExit("aborted")
 
-        print("=== updating version, pins and changelog")
+        print(f"=== syncing the cabs from meerkat_imaging {plan['meerkat_new'][:7]}")
+        _apply_sync(plan["meerkat_new"])
+        print("=== updating version and changelog")
         _set_project_version(plan["package_new"])
-        _update_pins(
-            plan["ddfacet_old"], plan["ddfacet_new"],
-            plan["killms_old"], plan["killms_new"],
-        )
         _insert_changelog(plan["section"], plan["package_old"], plan["package_new"])
         _verify_pins(plan["ddfacet_new"], plan["killms_new"])
         notes_section = _changelog_entry(plan["package_new"])
@@ -735,8 +934,8 @@ def release(
             print(f"=== committing {message}")
             _run("git", "add", "-A")
             _run("git", "commit", "-m", message, "-m",
-                 "Update the packaged image pins and generate the changelog "
-                 "from the upstream DDFacet and killMS histories.")
+                 f"Sync the cabs from meerkat_imaging {plan['meerkat_new'][:7]} and generate the "
+                 "changelog from the upstream DDFacet and killMS histories and the cab history.")
             _run("git", "tag", "-a", tag, "-m", message)
             commit = _git(ROOT, "rev-parse", "HEAD")
 

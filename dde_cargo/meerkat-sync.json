@@ -1,0 +1,10 @@
+{
+  "meerkat_imaging_commit": "529047a944bb089d2db671a9d53fe5f696a2d86b",
+  "files": {
+    "ddfacet.yml": "ee3426f55f0575a64b111d90400239587f6f7ce01bb5a4300b36075490c3397b",
+    "ddfacet-memory-plan.yml": "8d27f86959c121c9e38c5967b073786d1497f8f9a661eb88c3d67482fb75dd41",
+    "killms-memory-plan.yml": "e50082cc128ed6599c31457408751a9bd9d0d504f7532137081b41ea66114050",
+    "ddfacet_stimela_inputs_schema.yml": "b7ec93fea1c9375baa74e870e3f049779035bc67d101b347bf0aedc9f2116af1",
+    "killms_stimela_schema.yml": "6334574119e3f20a2a60efca7a9782d5f4d37d50478031262287bc97cc65df8d"
+  }
+}
