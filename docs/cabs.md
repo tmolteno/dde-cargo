@@ -1538,7 +1538,7 @@ ddfacet-target:
 ### Description
 
 Plan a killMS solve: NCPU, and whether the calibrated peak-memory model (memplan-model.json), evaluated on the
-MS's total rows and channels, fits the budget.  TChunk and NChanSols pass through (memory is flat in them).
+MS's total rows and channels and on the sky model's facet grids (DicoFacet), fits the budget.  TChunk and NChanSols pass through.
 
 ### Notes
 
@@ -1562,12 +1562,14 @@ branch on it.
 ### Inputs
 
 <details>
-<summary><code>Inputs</code> (10 parameters)</summary>
+<summary><code>Inputs</code> (12 parameters)</summary>
 
 | Parameter | Type | Required | Default | Description |
 |---|---|---|---|---|
 | `MS` | `MS` | yes | — | the MS the solve reads; its tables are read for the total rows and channels |
 | `FieldID` | `int` | no | `0` | the MS field (kMS --FieldID) |
+| `DicoFacet` | `File` | no | — | the DicoFacet of the DDFacet run that made the base model (<Output.Name>.DicoFacet): the facets the solve's predict builds its model grids on.  Without it the facet-grid term is left out and the plan under-predicts at large NPix |
+| `DicoModel` | `File` | no | — | the base DicoModel (default: the DicoFacet's name with .DicoModel).  Read for its component pixels, to count only the facets that hold model flux; if missing every facet is counted |
 | `SSDModel` | `bool` | no | `False` | the base DicoModel holds SSD (SSD2 / SSD3) components rather than HMP ones |
 | `RamGB` | `float` | no | — | memory the solve may use, GB.  Default: what the host has available when the step runs -- MemAvailable, capped by the cgroup memory limit if there is one |
 | `WantNCPU` | `int` | no | — | worker count you would like; also the cap.  Default: the usable cores (the CPU affinity set) |

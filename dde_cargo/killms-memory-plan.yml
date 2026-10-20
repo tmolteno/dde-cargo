@@ -10,25 +10,25 @@
 # from the forked pool.  THIS file is now the planner; the old "copied verbatim from the package" text is gone.
 #
 # THE MODEL
-#   peak = a + c1 * rows_total * nchan * 8e-9 + c2 * [the sky model is SSD]       max RSS of the kMS.py process, GB
-#   rows_total = the WHOLE MS's rows (read from the MS), nchan its channels.  Measured flat in TChunk (0.25 / 0.5 /
-#   1.0 h), NDir (4 / 10 / 20: 14.9 / 15.0 / 15.2 GB), NChanSols (4 / 20) and NCPU (4 / 12 / 20); what moves it is
-#   the size of the MS (target 0, with twice the rows, is +8.6 GB: 23.9 against 14.9).  So TChunk and NChanSols are
-#   not memory knobs: this cab passes them through as configured (TChunkWant 0.5 and NChanSolsWant 20, the pipeline's
-#   values) and returns every usable core as NCPU.  The solver threads are one process, so a thread costs nothing
-#   measurable.
-#   The coefficients live in memplan-model.json (repo root), written by `tools/memplan-fit.py RUNS.TSV --write-model
-#   memplan-model.json`.  Calibration of 2026-10-18, phase 1, fast profile, spark: 10 kMS runs, leave-one-out 9/10
-#   within 20 % (the t0 point is the only one on its axis, so its LOO is undefined) and 42/42 schmalzburg #63 x86
-#   points within 20 %.  The 79-channel fast profile only constrains the channel slope weakly: phase 2 measures the
-#   real profile's 314 channels, and the fit will move.  Design, data and bands: research/MEMORY_PLAN_CALIBRATION.md.
-#   To refit, regenerate the JSON (memplan-fit.py --write-model also regenerates this cab).
-#   SSDModel (the base DicoModel holds SSD components, +2.6 GB) is an input, not derived from the DicoModel's type:
-#   the recipe already knows its deconvolution mode, and reading the type out of the DicoModel was not attempted.
-#   CAUTION: the model is linear in nchan and was calibrated at 79 channels only; at the real profile's 314 it
-#   predicts 41.7 GB (t1) and 77.9 GB (t0).  That is a 4x extrapolation, NOT yet checked against a real-profile solve
-#   (phase 2 does), so a plan that "does not fit" there may be the model, not the solve.  `FailOnNoFit: false`
-#   reports Fits false without failing the step.
+#   peak = a + c1 * rows_total * nchan * 8e-9 + c2 * NDegridBand * sum_pad2_flux * 8e-9 + c3 * [SSD] * NPix^2 * 1e-9
+#   (max RSS of the kMS.py process, GB; coefficients in memplan-model.json, written by `tools/memplan-fit.py ... --write-model`).
+#   - rows_total, nchan: the WHOLE MS (read from the MS tables); TChunk does not matter.
+#   - The second term is the sky model's facet grids.  The predict cuts the model image into one complex64 grid per facet and
+#     degrid band and keeps them for the whole solve (killMS/Predict/ClassImageSM2.py -> DDFacet ClassFacetMachine.set_model_grid),
+#     but only for facets that hold model flux (killMS#30).  NDegridBand is NChanSols (kMS.py sets Freq.NDegridBand from it, so
+#     the DDFacet run's own NDegridBand never reaches the solve), and sum_pad2_flux is the sum of NpixFacetPadded^2 over the facets
+#     whose padded square contains a model component.  Both come from the finalize clean's DicoFacet and DicoModel, which exist when
+#     this step runs.  The first calibration (phases 1-2) had only NPix 1225 / 3375 models and no such term: it under-predicted the
+#     auto run's NPix 5265 solves by 70-80 % (research/MEMORY_PLAN_CALIBRATION.md section 9).
+#   - Without a DicoFacet the term is omitted and the plan says so (a warning in the JSON and on stdout): it then under-predicts at
+#     large NPix.  Without a DicoModel every facet counts (a few % to tens of % high).
+#   - NChanSols is therefore a memory knob (about 0.5 GB per band at NPix 4459), no longer a pass-through of no consequence;
+#     this cab still passes NChanSolsWant through unchanged and returns every usable core as NCPU.
+#   Measured flat in TChunk (0.25 / 0.5 / 1.0 h), NDir (4 / 10 / 20) and NCPU (4 / 12 / 20).
+#   - The SSD term: an SSD DicoModel is a dense image (nterms x NPix x NPix), expanded by the predict, so it costs ~NPix^2 (+2 GB at
+#     NPix 1225, +30 GB at 5265).  Calibrated on ONE large SSD solve (research file, section 9).  SSDModel (the base DicoModel holds
+#     SSD components) is an input, not derived from the DicoModel's type; NPix is estimated from the DicoFacet.
+#   To refit, regenerate the JSON (memplan-fit.py --write-model also regenerates this cab).  Data, bands: the research file, section 9.
 #
 # SELF-CONTAINED (this cab ships in the dde-cargo package, so it reads no host file): tools/memplan_lib.py and
 # memplan-model.json are inlined into the python-code command by tools/build-memplan-cabs.py, which generates the cab
@@ -42,6 +42,7 @@
 #         params:
 #             MS: =recipe.target-ms
 #             SSDModel: =recipe.ddf-deconv-mode != 'HMP'
+#             DicoFacet: '{steps.finalize-deconvolution.Output.Name}.DicoFacet'   # the facets of the model the solve predicts from
 #     killms-target:
 #         params:
 #             NCPU: =steps.killms-memory-plan.NCPU
@@ -68,7 +69,7 @@ cabs:
     killms-memory-plan:
         info: |
             Plan a killMS solve: NCPU, and whether the calibrated peak-memory model (memplan-model.json), evaluated on the
-            MS's total rows and channels, fits the budget.  TChunk and NChanSols pass through (memory is flat in them).
+            MS's total rows and channels and on the sky model's facet grids (DicoFacet), fits the budget.  TChunk and NChanSols pass through.
         image:
             _use: vars.killms-memory-plan.image
         inputs:
@@ -80,6 +81,18 @@ cabs:
                 dtype: int
                 default: 0
                 info: the MS field (kMS --FieldID)
+            DicoFacet:
+                dtype: File
+                required: false
+                info: >
+                    the DicoFacet of the DDFacet run that made the base model (<Output.Name>.DicoFacet): the facets the solve's predict
+                    builds its model grids on.  Without it the facet-grid term is left out and the plan under-predicts at large NPix
+            DicoModel:
+                dtype: File
+                required: false
+                info: >
+                    the base DicoModel (default: the DicoFacet's name with .DicoModel).  Read for its component pixels, to count only the
+                    facets that hold model flux; if missing every facet is counted
             SSDModel:
                 dtype: bool
                 default: false
@@ -339,12 +352,12 @@ cabs:
                 np.save(path, cat)
 
 
-            def tessellate(GD, ra, dec, msname="stub.ms", proxy_nodes=0):
+            def tessellate(GD, ra, dec, msname="stub.ms", proxy_nodes=0, dico_out=None):
                 """The facets DDFacet will build: runs ClassFacetMachineTessel.appendMainField (-> setFacetsLocs, AppendFacet)
                 itself, on a facet machine whose __init__ is skipped and whose VisServer is a stub carrying the phase centre.
                 Needs GD["Image"]["NPix"/"Cell"], ["Facets"]["Padding"/"DiamMax"/"DiamMin"/"NFacets"/"CatNodes"/"CatCentres"].
                 proxy_nodes=N (when GD has no CatNodes): tessellate around N synthetic directions instead of the NFacets grid
-                (see _write_proxy_nodes).  Returns (nfacets, sum NpixFacetPadded^2, list of padded sizes).  Writes its
+                (see _write_proxy_nodes).  Returns (nfacets, sum NpixFacetPadded^2, list of padded sizes); dico_out=PATH also pickles the DicoImager there.  Writes its
                 .reg/.npy/.DicoFacet side files to a temp dir, and drops DDSols (the nodes then come from CatNodes or the NFacets grid, as for a first imaging pass)."""
                 from DDFacet.Imager.ClassFacetMachineTessel import ClassFacetMachineTessel
                 from DDFacet.Imager.ClassFacetMachine import ClassFacetMachine
@@ -378,6 +391,10 @@ cabs:
                                                           NFacets=int(gd["Facets"]["NFacets"]),
                                                           ImageName=os.path.join(tmp, "out"))
                     pads = [int(v["NpixFacetPadded"]) for v in fm.DicoImager.values()]
+                    if dico_out:                             # the facets themselves (a DicoFacet-like pickle), for dico_facet_stats
+                        import pickle
+                        with open(dico_out, "wb") as fh:
+                            pickle.dump(dict(fm.DicoImager), fh)
                 finally:
                     os.chdir(cwd)
                     shutil.rmtree(tmp, ignore_errors=True)
@@ -409,12 +426,53 @@ cabs:
                 return float(sum(terms.values())), terms
 
 
-            def kms_peak(model, rows_total, nchan, ssd=False):
-                """Predicted max RSS of kMS.py, GB (1e9 B); flat in TChunk, NDir, NChanSols and NCPU (phase 1)."""
+            def dico_facet_stats(path, dicomodel=None, transpose=False):
+                """Geometry of the facets DDFacet built, from a DicoFacet file (a plain pickle: no DDFacet needed to read it).
+                Returns dict(nfac, pad2 = sum NpixFacetPadded^2 over all facets, nfac_nz, pad2_nz = the same over the facets the kMS predict
+                KEEPS a model grid for).  killMS keeps the grid only for facets whose cut of the model has positive flux
+                (ClassFacetMachine._set_model_grid_worker, killMS#30), and the cut is the whole padded square around the facet centre
+                (ClassImToGrid.GiveModelTessel), so with a DicoModel (plain pickle, Comp keyed by pixel) a facet counts when a model component
+                pixel falls inside its padded square.  Without one, nfac_nz / pad2_nz equal the all-facet values (the safe, high side)."""
+                import pickle
+                with open(path, "rb") as fh:
+                    d = pickle.load(fh)
+                fac = [v for v in d.values() if isinstance(v, dict) and "NpixFacetPadded" in v]
+                if not fac:
+                    raise RuntimeError("%s has no facets (is it a DicoFacet?)" % path)
+                pad = np.array([float(v["NpixFacetPadded"]) for v in fac])
+                ext = np.array([[float(x) for x in v["pixExtent"]] for v in fac if "pixExtent" in v]).reshape(-1, 4)
+                out = dict(nfac=len(fac), pad2=float((pad ** 2).sum()), nfac_nz=len(fac), pad2_nz=float((pad ** 2).sum()), n_comp=None,
+                           npix_est=float(ext[:, [1, 3]].max()) if len(ext) else None)    # the facets tile the image: its size to ~1 %
+                if dicomodel:
+                    with open(dicomodel, "rb") as fh:
+                        m = pickle.load(fh)
+                    xy = np.array([k for k in m["Comp"].keys() if isinstance(k, tuple) and len(k) == 2], dtype=float).reshape(-1, 2)
+                    if transpose:
+                        xy = xy[:, ::-1]
+                    ctr = np.array([v["pixCentral"] for v in fac], dtype=float)
+                    lo, hi = ctr - (pad / 2.0)[:, None], ctr + (pad / 2.0)[:, None]
+                    hit = np.array([bool(np.any(np.all((xy >= lo[i]) & (xy < hi[i]), axis=1))) for i in range(len(fac))]) if len(xy) else \
+                        np.zeros(len(fac), bool)
+                    out.update(nfac_nz=int(hit.sum()), pad2_nz=float((pad[hit] ** 2).sum()), n_comp=int(len(xy)))
+                return out
+
+
+            def kms_peak(model, rows_total, nchan, ssd=False, ndegrid=None, pad2_nz=None, npix=None):
+                """Predicted max RSS of kMS.py, GB (1e9 B); flat in TChunk, NDir and NCPU (phase 1).
+                X1: the whole MS (rows_total * nchan).  X2n: the sky model's facet grids: the predict cuts the model image into one complex64
+                grid per facet and degrid band and keeps them for the solve, but only for facets with model flux.  ndegrid = NChanSols
+                (kMS.py sets Freq.NDegridBand from it); pad2_nz = dico_facet_stats(...)["pad2_nz"], the sum of NpixFacetPadded^2 over the facets
+                with flux.  pad2_nz None omits X2n (the plan then under-predicts at large NPix; the caller says so).
+                XS: an SSD DicoModel is a dense image (nterms x NPix x NPix) that the predict expands: [SSD] * NPix^2 * 1e-9 (npix None omits it)."""
                 c = model["kms"]["coefficients"]
                 terms = {"a": c["a"], "X1": c["X1"] * rows_total * nchan * 8e-9}
+                if "X2n" in c and pad2_nz is not None and ndegrid is not None:
+                    terms["X2n"] = c["X2n"] * ndegrid * pad2_nz * 8e-9
                 if ssd:
-                    terms["model=SSD"] = c.get("model=SSD", 0.0)
+                    if "XS" in c and npix is not None:
+                        terms["XS"] = c["XS"] * npix ** 2 * 1e-9
+                    if "model=SSD" in c:
+                        terms["model=SSD"] = c["model=SSD"]
                 return float(sum(terms.values())), terms
 
 
@@ -480,8 +538,9 @@ cabs:
             _MODEL_JSON = r'''{
               "schema": 2,
               "ddf_form": "D",
-              "source_note": "phase 1 + 2 + 2b (fast and real profile), spark:~/tmp/ddf-accept/memplan-p1/runs.tsv and memplan-p2/runs.tsv (2026-10-18), joint with the x86 #63 overnight legs; kMS fitted on spark only",
+              "source_note": "kMS refit 2026-10-20 (a + X1 + X2n + XS) on spark memplan-p1 + p2 + p3 + x86 #63; the DDF block is unchanged from the 2026-10-18 fit (phase 2b)",
               "fitted": "2026-10-18",
+              "kms_fitted": "2026-10-20",
               "metric": "maxrss",
               "units": "GB = 1e9 B of peak max RSS of the DDF.py / kMS.py process",
               "generated_by": "tools/memplan-fit.py --write-model",
@@ -489,19 +548,24 @@ cabs:
               "data": {
                 "spark_runs": [
                   {
-                    "file": "p1/runs.tsv",
+                    "file": "memplan-p1/runs.tsv",
                     "sha256": "5a84066ae97cf4cb"
                   },
                   {
-                    "file": "p2/runs.tsv",
+                    "file": "memplan-p2/runs.tsv",
                     "sha256": "d15598bb98ac0261"
+                  },
+                  {
+                    "file": "memplan-p3/runs.tsv",
+                    "sha256": "d163d673692a7020"
                   }
                 ],
                 "x86_roots": [
                   "p63-seeds",
                   "p63-pilot",
                   "p63-sweep"
-                ]
+                ],
+                "ddf_note": "ddf block: spark p1 + p2(+2b) + x86, as fitted 2026-10-18 (memplan-model.json at b94bda0)"
               },
               "ddf": {
                 "coefficients": {
@@ -536,16 +600,18 @@ cabs:
               },
               "kms": {
                 "coefficients": {
-                  "a": 10.112142435169762,
-                  "X1": 23.918662430119902,
-                  "model=SSD": 2.0609038438768494
+                  "a": 7.888278507526808,
+                  "X1": 20.600866572952196,
+                  "X2n": 0.5187324744643504,
+                  "XS": 757.1023690300507
                 },
                 "features": {
                   "a": "constant floor (GB)",
                   "X1": "rows_total (the WHOLE MS, not a TChunk) * nchan, times 8e-9",
-                  "model=SSD": "1 when the sky model is an SSD DicoModel (GB added)"
+                  "X2n": "NDegridBand (= NChanSols: kMS.py sets Freq.NDegridBand from it) * sum of NpixFacetPadded^2 over the facets that hold model flux (a model component pixel inside the facet's padded square), times 8e-9: the predict's per-facet model grids (complex64, one plane per degrid band; killMS keeps them only for facets with flux)",
+                  "XS": "[sky model is SSD] * NPix^2 * 1e-9: an SSD DicoModel is a dense image (Comp Vals, nterms x NPix x NPix) that the predict expands, so its cost follows the image size (HMP models are sparse pixel lists)"
                 },
-                "npoints": 12,
+                "npoints": 73,
                 "underdetermined": false,
                 "dropped_terms": []
               }
@@ -563,7 +629,21 @@ cabs:
             cores = int(_opt("WantNCPU") or L.usable_cores())
             margin = float(Margin)
             ssd = bool(_opt("SSDModel", False))
-            PeakGB, terms = L.kms_peak(model, ms["nrows"], ms["nchan"], ssd=ssd)
+            warnings = []
+            geom = None
+            _df = _opt("DicoFacet")
+            if _df and os.path.exists(_df):
+                _dm = _opt("DicoModel") or (_df[:-len(".DicoFacet")] + ".DicoModel" if _df.endswith(".DicoFacet") else None)
+                if not (_dm and os.path.exists(_dm)):
+                    warnings.append("no DicoModel (%s): every facet is counted as holding flux, the prediction is high" % _dm)
+                    _dm = None
+                geom = L.dico_facet_stats(_df, _dm)
+            else:
+                warnings.append("no DicoFacet: the facet-grid term is left out and the prediction is LOW at large NPix")
+            ndegrid = int(NChanSolsWant)
+            PeakGB, terms = L.kms_peak(model, ms["nrows"], ms["nchan"], ssd=ssd, ndegrid=ndegrid,
+                                       pad2_nz=geom["pad2_nz"] if geom else None,
+                                       npix=geom["npix_est"] if geom else None)
             PlannedGB = PeakGB * margin
             Fits = bool(PlannedGB <= ram_gb)
             NCPU = cores
@@ -574,6 +654,11 @@ cabs:
             print("MS %s: %d rows (field %d), %d chan, %d antennas, %s sky model"
                   % (os.path.basename(MS.rstrip("/")), ms["nrows"], int(FieldID), ms["nchan"], ms["nant"],
                      "SSD" if ssd else "HMP"))
+            if geom:
+                print("model facets: %d (%d with flux), sum padded px^2 %.4g (%.4g with flux), %d degrid bands"
+                      % (geom["nfac"], geom["nfac_nz"], geom["pad2"], geom["pad2_nz"], ndegrid))
+            for _w in warnings:
+                print("WARNING: " + _w)
             print("predicted peak %.1f GB, x%g = %.1f GB; budget %.1f GB (%s); %d core(s)%s -> %s"
                   % (PeakGB, margin, PlannedGB, ram_gb, ram_source, cores, "" if _opt("WantNCPU") else " usable",
                      "fits" if Fits else "DOES NOT FIT"))
@@ -582,7 +667,8 @@ cabs:
             with open(Plan, "w") as _fh:
                 json.dump(dict(fits=Fits, ncpu=NCPU, tchunk=TChunk, nchansols=NChanSols, peak_gb=PeakGB,
                                planned_gb=PlannedGB, margin=margin, ram_gb=ram_gb, ram_source=ram_source,
-                               ssd_model=ssd, rows_total=ms["nrows"], nchan=ms["nchan"], terms=terms,
+                               ssd_model=ssd, rows_total=ms["nrows"], nchan=ms["nchan"], terms=terms, ndegrid=ndegrid,
+                               facets=geom, warnings=warnings,
                                model_fitted=model.get("fitted"), flags=Flags), _fh, indent=2)
             if not Fits and bool(_opt("FailOnNoFit", True)):
                 raise RuntimeError("killms-memory-plan: the solve does not fit: predicted %.1f GB x%g = %.1f GB "
