@@ -18,19 +18,19 @@ Full parameter reference: [docs/cabs.md](https://github.com/tmolteno/dde-cargo/b
 
 | Cab | Purpose | Image |
 |---|---|---|
-| [`bdsf.catalog`][cab-bdsf-catalog] | Image-only override for cult-cargo's PyBDSF step | `ghcr.io/tmolteno/ddfacet:v0.16.6` |
-| [`ddfacet`][cab-ddfacet] | Direction-dependent imager, gridder and deconvolver | `ghcr.io/tmolteno/ddfacet:v0.16.6` |
-| [`killms`][cab-killms] | Direction-dependent gain solver | `ghcr.io/tmolteno/killms:v3.15.8` |
-| [`ddf_makemodel`][cab-ddf-makemodel] | Build a direction catalogue from a DS9 region | `ghcr.io/tmolteno/ddfacet:v0.16.6` |
-| [`ddf_makemask`][cab-ddf-makemask] | Make a FITS clean mask from a restored image | `ghcr.io/tmolteno/ddfacet:v0.16.6` |
-| [`dilatemask`][cab-dilatemask] | Dilate a clean mask by N synthesised beams | `ghcr.io/tmolteno/ddfacet:v0.16.6` |
-| [`clustercat`][cab-clustercat] | Cluster sources into DD direction nodes | `ghcr.io/tmolteno/ddfacet:v0.16.6` |
-| [`ddfacet-get-npix`][cab-ddfacet-get-npix] | Compute the padded image size DDFacet needs | `ghcr.io/tmolteno/ddfacet:v0.16.6` |
-| [`modelcat`][cab-modelcat] | Replace BDSF catalogue fluxes with model flux | `ghcr.io/tmolteno/ddfacet:v0.16.6` |
-| [`autofacet`][cab-autofacet] | Derive facet centres from the DI products | `ghcr.io/tmolteno/ddfacet:v0.16.6` |
-| [`snapnodes`][cab-snapnodes] | Snap DD nodes onto their dominant modelled source | `ghcr.io/tmolteno/ddfacet:v0.16.6` |
-| [`ddfacet-memory-plan`][cab-ddfacet-memory-plan] | Suggest DDFacet memory and parallel settings | `ghcr.io/tmolteno/ddfacet:v0.16.6` |
-| [`killms-memory-plan`][cab-killms-memory-plan] | Suggest killMS memory and parallel settings | `ghcr.io/tmolteno/killms:v3.15.8` |
+| [`bdsf.catalog`][cab-bdsf-catalog] | Image-only override for cult-cargo's PyBDSF step | `ghcr.io/tmolteno/ddfacet:v0.16.9` |
+| [`ddfacet`][cab-ddfacet] | Direction-dependent imager, gridder and deconvolver | `ghcr.io/tmolteno/ddfacet:v0.16.9` |
+| [`killms`][cab-killms] | Direction-dependent gain solver | `ghcr.io/tmolteno/killms:v3.15.11` |
+| [`ddf_makemodel`][cab-ddf-makemodel] | Build a direction catalogue from a DS9 region | `ghcr.io/tmolteno/ddfacet:v0.16.9` |
+| [`ddf_makemask`][cab-ddf-makemask] | Make a FITS clean mask from a restored image | `ghcr.io/tmolteno/ddfacet:v0.16.9` |
+| [`dilatemask`][cab-dilatemask] | Dilate a clean mask by N synthesised beams | `ghcr.io/tmolteno/ddfacet:v0.16.9` |
+| [`clustercat`][cab-clustercat] | Cluster sources into DD direction nodes | `ghcr.io/tmolteno/ddfacet:v0.16.9` |
+| [`ddfacet-get-npix`][cab-ddfacet-get-npix] | Compute the padded image size DDFacet needs | `ghcr.io/tmolteno/ddfacet:v0.16.9` |
+| [`modelcat`][cab-modelcat] | Replace BDSF catalogue fluxes with model flux | `ghcr.io/tmolteno/ddfacet:v0.16.9` |
+| [`autofacet`][cab-autofacet] | Derive facet centres from the DI products | `ghcr.io/tmolteno/ddfacet:v0.16.9` |
+| [`snapnodes`][cab-snapnodes] | Snap DD nodes onto their dominant modelled source | `ghcr.io/tmolteno/ddfacet:v0.16.9` |
+| [`ddfacet-memory-plan`][cab-ddfacet-memory-plan] | Suggest DDFacet memory and parallel settings | `ghcr.io/tmolteno/ddfacet:v0.16.9` |
+| [`killms-memory-plan`][cab-killms-memory-plan] | Suggest killMS memory and parallel settings | `ghcr.io/tmolteno/killms:v3.15.11` |
 
 All images are published for amd64 and arm64.
 

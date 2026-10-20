@@ -1,7 +1,7 @@
 # Copyright (c) 2026 Tim Molteno (tim@elec.ac.nz)
 [project]
 name = "dde-cargo"
-version = "0.1.1"
+version = "0.2.0"
 description = "Stimela cab definitions for DDFacet and killMS"
 authors = [
     { name = "Tim Molteno", email = "tim@elec.ac.nz" }

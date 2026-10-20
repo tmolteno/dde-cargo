@@ -36,19 +36,19 @@ through `kMS.py`.
 
 | Cab | Kind | Purpose | Image |
 |---|---|---|---|
-| [`bdsf.catalog`](#cab-bdsf-catalog) | image override | Image-only override that runs cult-cargo's PyBDSF catalogue step in the multi-arch DDFacet image. | `ghcr.io/tmolteno/ddfacet:v0.16.6` |
-| [`ddfacet`](#cab-ddfacet) | container | Direction-dependent imager, gridder and deconvolver (`DDF.py`). | `ghcr.io/tmolteno/ddfacet:v0.16.6` |
-| [`killms`](#cab-killms) | container | Direction-dependent gain solver (`kMS.py`). | `ghcr.io/tmolteno/killms:v3.15.8` |
-| [`ddf_makemodel`](#cab-ddf-makemodel) | container | Build a direction-clustering catalogue from a DS9 region (`MakeModel.py`). | `ghcr.io/tmolteno/ddfacet:v0.16.6` |
-| [`ddf_makemask`](#cab-ddf-makemask) | container | Make a FITS clean mask from a restored image (`MakeMask.py`). | `ghcr.io/tmolteno/ddfacet:v0.16.6` |
-| [`dilatemask`](#cab-dilatemask) | python-code | Dilate an external clean mask by N synthesised beams. | `ghcr.io/tmolteno/ddfacet:v0.16.6` |
-| [`clustercat`](#cab-clustercat) | container | Cluster a source catalogue into DD direction nodes (`ClusterCat.py`). | `ghcr.io/tmolteno/ddfacet:v0.16.6` |
-| [`ddfacet-get-npix`](#cab-ddfacet-get-npix) | python-code | Compute the padded image size DDFacet needs. | `ghcr.io/tmolteno/ddfacet:v0.16.6` |
-| [`modelcat`](#cab-modelcat) | python-code | Replace BDSF catalogue fluxes with the first-pass model flux. | `ghcr.io/tmolteno/ddfacet:v0.16.6` |
-| [`autofacet`](#cab-autofacet) | python-code | Derive facet centres from the DI image products. | `ghcr.io/tmolteno/ddfacet:v0.16.6` |
-| [`snapnodes`](#cab-snapnodes) | python-code | Move DD direction nodes onto the dominant modelled source in each cell. | `ghcr.io/tmolteno/ddfacet:v0.16.6` |
-| [`ddfacet-memory-plan`](#cab-ddfacet-memory-plan) | memory plan | Suggest DDFacet NCPU, chunk size and channel step from a memory budget. | `ghcr.io/tmolteno/ddfacet:v0.16.6` |
-| [`killms-memory-plan`](#cab-killms-memory-plan) | memory plan | Suggest killMS NCPU, chunk size and solution interval from a memory budget. | `ghcr.io/tmolteno/killms:v3.15.8` |
+| [`bdsf.catalog`](#cab-bdsf-catalog) | image override | Image-only override that runs cult-cargo's PyBDSF catalogue step in the multi-arch DDFacet image. | `ghcr.io/tmolteno/ddfacet:v0.16.9` |
+| [`ddfacet`](#cab-ddfacet) | container | Direction-dependent imager, gridder and deconvolver (`DDF.py`). | `ghcr.io/tmolteno/ddfacet:v0.16.9` |
+| [`killms`](#cab-killms) | container | Direction-dependent gain solver (`kMS.py`). | `ghcr.io/tmolteno/killms:v3.15.11` |
+| [`ddf_makemodel`](#cab-ddf-makemodel) | container | Build a direction-clustering catalogue from a DS9 region (`MakeModel.py`). | `ghcr.io/tmolteno/ddfacet:v0.16.9` |
+| [`ddf_makemask`](#cab-ddf-makemask) | container | Make a FITS clean mask from a restored image (`MakeMask.py`). | `ghcr.io/tmolteno/ddfacet:v0.16.9` |
+| [`dilatemask`](#cab-dilatemask) | python-code | Dilate an external clean mask by N synthesised beams. | `ghcr.io/tmolteno/ddfacet:v0.16.9` |
+| [`clustercat`](#cab-clustercat) | container | Cluster a source catalogue into DD direction nodes (`ClusterCat.py`). | `ghcr.io/tmolteno/ddfacet:v0.16.9` |
+| [`ddfacet-get-npix`](#cab-ddfacet-get-npix) | python-code | Compute the padded image size DDFacet needs. | `ghcr.io/tmolteno/ddfacet:v0.16.9` |
+| [`modelcat`](#cab-modelcat) | python-code | Replace BDSF catalogue fluxes with the first-pass model flux. | `ghcr.io/tmolteno/ddfacet:v0.16.9` |
+| [`autofacet`](#cab-autofacet) | python-code | Derive facet centres from the DI image products. | `ghcr.io/tmolteno/ddfacet:v0.16.9` |
+| [`snapnodes`](#cab-snapnodes) | python-code | Move DD direction nodes onto the dominant modelled source in each cell. | `ghcr.io/tmolteno/ddfacet:v0.16.9` |
+| [`ddfacet-memory-plan`](#cab-ddfacet-memory-plan) | memory plan | Suggest DDFacet NCPU, chunk size and channel step from a memory budget. | `ghcr.io/tmolteno/ddfacet:v0.16.9` |
+| [`killms-memory-plan`](#cab-killms-memory-plan) | memory plan | Suggest killMS NCPU, chunk size and solution interval from a memory budget. | `ghcr.io/tmolteno/killms:v3.15.11` |
 
 ## Typical wiring
 
@@ -80,7 +80,7 @@ recipe's own step flow controls what runs.
 **Purpose:** Image-only override that runs cult-cargo's PyBDSF catalogue step in the multi-arch DDFacet image.
 
 **Kind:** image override  
-**Image:** `ghcr.io/tmolteno/ddfacet:v0.16.6`  
+**Image:** `ghcr.io/tmolteno/ddfacet:v0.16.9`  
 
 ### Notes
 
@@ -120,7 +120,7 @@ This cab defines no outputs.
 **Purpose:** Direction-dependent imager, gridder and deconvolver (`DDF.py`).
 
 **Kind:** container  
-**Image:** `ghcr.io/tmolteno/ddfacet:v0.16.6`  
+**Image:** `ghcr.io/tmolteno/ddfacet:v0.16.9`  
 **Command:** `DDF.py`  
 
 ### Notes
@@ -782,7 +782,7 @@ ddfacet-target:
 **Purpose:** Direction-dependent gain solver (`kMS.py`).
 
 **Kind:** container  
-**Image:** `ghcr.io/tmolteno/killms:v3.15.8`  
+**Image:** `ghcr.io/tmolteno/killms:v3.15.11`  
 **Command:** `kMS.py`  
 
 ### Notes
@@ -980,7 +980,7 @@ killms-target:
 **Purpose:** Build a direction-clustering catalogue from a DS9 region (`MakeModel.py`).
 
 **Kind:** container  
-**Image:** `ghcr.io/tmolteno/ddfacet:v0.16.6`  
+**Image:** `ghcr.io/tmolteno/ddfacet:v0.16.9`  
 **Command:** `MakeModel.py`  
 
 ### Notes
@@ -1028,7 +1028,7 @@ make-model:
 **Purpose:** Make a FITS clean mask from a restored image (`MakeMask.py`).
 
 **Kind:** container  
-**Image:** `ghcr.io/tmolteno/ddfacet:v0.16.6`  
+**Image:** `ghcr.io/tmolteno/ddfacet:v0.16.9`  
 **Command:** `MakeMask.py`  
 
 ### Notes
@@ -1073,7 +1073,7 @@ make-mask:
 **Purpose:** Dilate an external clean mask by N synthesised beams.
 
 **Kind:** python-code  
-**Image:** `ghcr.io/tmolteno/ddfacet:v0.16.6`  
+**Image:** `ghcr.io/tmolteno/ddfacet:v0.16.9`  
 **Command:** inline Python  
 
 ### Description
@@ -1121,7 +1121,7 @@ around bright sources; it does not change the deconvolution threshold.
 **Purpose:** Cluster a source catalogue into DD direction nodes (`ClusterCat.py`).
 
 **Kind:** container  
-**Image:** `ghcr.io/tmolteno/ddfacet:v0.16.6`  
+**Image:** `ghcr.io/tmolteno/ddfacet:v0.16.9`  
 **Command:** `ClusterCat.py`  
 
 ### Notes
@@ -1175,7 +1175,7 @@ cluster:
 **Purpose:** Compute the padded image size DDFacet needs.
 
 **Kind:** python-code  
-**Image:** `ghcr.io/tmolteno/ddfacet:v0.16.6`  
+**Image:** `ghcr.io/tmolteno/ddfacet:v0.16.9`  
 **Command:** inline Python  
 
 ### Description
@@ -1227,7 +1227,7 @@ ddfacet-target:
 **Purpose:** Replace BDSF catalogue fluxes with the first-pass model flux.
 
 **Kind:** python-code  
-**Image:** `ghcr.io/tmolteno/ddfacet:v0.16.6`  
+**Image:** `ghcr.io/tmolteno/ddfacet:v0.16.9`  
 **Command:** inline Python  
 
 ### Description
@@ -1292,7 +1292,7 @@ flux 0 and are dropped by `clustercat`'s `FluxMin`.  See DDFacet#33.
 **Purpose:** Derive facet centres from the DI image products.
 
 **Kind:** python-code  
-**Image:** `ghcr.io/tmolteno/ddfacet:v0.16.6`  
+**Image:** `ghcr.io/tmolteno/ddfacet:v0.16.9`  
 **Command:** inline Python  
 
 ### Description
@@ -1352,7 +1352,7 @@ working directory into the container.
 **Purpose:** Move DD direction nodes onto the dominant modelled source in each cell.
 
 **Kind:** python-code  
-**Image:** `ghcr.io/tmolteno/ddfacet:v0.16.6`  
+**Image:** `ghcr.io/tmolteno/ddfacet:v0.16.9`  
 **Command:** inline Python  
 
 ### Description
@@ -1432,16 +1432,13 @@ is never edited in place: the original is kept as
 **Purpose:** Suggest DDFacet NCPU, chunk size and channel step from a memory budget.
 
 **Kind:** memory plan  
-**Image:** `ghcr.io/tmolteno/ddfacet:v0.16.6`  
+**Image:** `ghcr.io/tmolteno/ddfacet:v0.16.9`  
 **Command:** inline Python  
 
 ### Description
 
-Suggest --Parallel-NCPU, --Data-ChunkHours and (only if the band has to
-give) --Selection-ChanStep for a DDFacet run, from its parset and a
-memory budget.  Reads the MS for its row/channel/antenna counts when
-one is given; pass NRows/NChan/NA instead when it cannot be read.
-Needs an image carrying DDFacet/ToolsDir/ModEstimateMemory.py.
+Choose --Parallel-NCPU, --Data-ChunkHours and (if the band must give) --Selection-ChanStep for a DDFacet
+run: the calibrated peak-memory model (memplan-model.json) evaluated on the run's real facet tessellation.
 
 ### Notes
 
@@ -1468,28 +1465,31 @@ pre-created as an existing file.
 ### Inputs
 
 <details>
-<summary><code>Inputs</code> (19 parameters)</summary>
+<summary><code>Inputs</code> (22 parameters)</summary>
 
 | Parameter | Type | Required | Default | Description |
 |---|---|---|---|---|
-| `Parset` | `File` | no | — | the parset whose geometry is being planned (e.g. the parset_out<br>of a ddfacet step).  Optional: with no parset, the geometry is<br>taken from the inputs below, which is the bootstrap case for a<br>fresh observation that has no earlier parset to plan from. |
-| `MS` | `MS` | no | — | measurement set to size the estimate with |
-| `RamGB` | `float` | no | — | memory the run may use.  Default: what the host has available when the step runs -- MemAvailable, capped by the cgroup memory limit if there is one (a container or systemd scope) |
-| `NPix` | `int` | no | — | image size, when there is no Parset to read it from |
-| `NFacets` | `int` | no | — |  |
-| `NBand` | `int` | no | — |  |
-| `OverS` | `int` | no | — |  |
-| `Support` | `int` | no | — |  |
-| `Nw` | `int` | no | — |  |
-| `ChunkHoursIn` | `float` | no | `0.5` | the chunk size you intend, when planning without a Parset |
+| `MS` | `MS` | yes | — | the MS the run images; read for rows, time span, channels, antennas and the phase centre only |
+| `Field` | `int` | no | `0` | the MS field (Selection.Field) |
+| `Parset` | `File` | no | — | a parset whose options are the starting point (e.g. the parset_out of an earlier step).  Optional: DDFacet's defaults are used otherwise.  The inputs below override whatever it says. |
+| `NPix` | `int` | no | — | Image.NPix |
+| `Cell` | `float` | no | — | Image.Cell, arcsec |
+| `Padding` | `float` | no | — | Facets.Padding |
+| `DiamMax` | `float` | no | — | Facets.DiamMax, deg |
+| `DiamMin` | `float` | no | — | Facets.DiamMin, deg |
+| `NFacets` | `int` | no | — | Facets.NFacets (the node grid when there is no CatNodes) |
+| `CatNodes` | `File` | no | — | Facets.CatNodes, the ClusterCat the run will use.  Need not exist yet: if absent the NFacets grid is planned and the plan says so |
+| `CatCentres` | `File` | no | — | Facets.CatCentres (auto-facet centres), when the run uses them |
+| `NDirections` | `int` | no | `0` | when there is no CatNodes (none given, or not written yet): plan around this many synthetic DD directions on a sunflower disc (as plan-uvmax does) instead of the NFacets grid, which under-counts a clustered run's facets by 25-35 %.  0 = the grid, which is right for a run that really has no CatNodes |
+| `NBand` | `int` | no | — | Freq.NBand |
+| `BeamModel` | `str` | no | — | Beam.Model (None or any beam model; None switches the beam term off) |
+| `BeamNBand` | `int` | no | — | Beam.NBand |
+| `Mode` | `str` | no | — | Deconv.Mode; default is the parset's, else DDFacet's default (HMP) Choices: `HMP`, `SSD2`, `SSD3` |
+| `Step` | `str` | no | `initial` | which pass is being planned: target = ddfacet-target (a Clean on grid facets); clustered = the largest of initial / finalize / corrected, the safe choice for a plan shared by those passes<br>Choices: `target`, `initial`, `finalize`, `corrected`, `clustered` |
+| `RamGB` | `float` | no | — | memory the run may use, GB.  Default: what the host has available when the step runs -- MemAvailable, capped by the cgroup memory limit if there is one |
 | `WantNCPU` | `int` | no | — | worker count you would like; also the cap.  Default: the usable cores (the CPU affinity set, so a taskset/cpuset is respected) |
-| `Threaded` | `bool` | no | `True` | the rayon line (DDFacet >= v0.12), where workers are threads in one process and NCPU costs no measurable memory: plan the memory at one worker and return every usable core as NCPU.  false = the process pool, where each worker costs memory (the model's original form) |
-| `Prefer` | `str` | no | `fidelity` | 'fidelity' keeps the full band while any worker count fits; 'speed' takes the workers first and subsamples the band if it must |
-| `NDirections` | `int` | no | `1` |  |
-| `NCorr` | `int` | no | `2` |  |
-| `NRows` | `int` | no | — |  |
-| `NChan` | `int` | no | — |  |
-| `NA` | `int` | no | — |  |
+| `Margin` | `float` | no | `1.25` | safety factor on the predicted peak before it is compared with RamGB |
+| `Prefer` | `str` | no | `fidelity` | 'fidelity' keeps the full band while any chunk length fits; 'speed' takes the largest chunk first and subsamples the band if it must Choices: `fidelity`, `speed` |
 | `PlanOut` | `File` | no | `ddfacet-memory-plan.json` | where to write the plan, as JSON |
 
 </details>
@@ -1501,10 +1501,10 @@ pre-created as an existing file.
 | `NCPU` | `int` | no | — |
 | `ChunkHours` | `float` | no | — |
 | `ChanStep` | `int` | no | — |
-| `MemWatermarkGB` | `float` | no | — |
-| `RamGBUsed` | `float` | no | — |
 | `PeakGB` | `float` | no | — |
-| `HostRAMGB` | `float` | no | — |
+| `PlannedGB` | `float` | no | — |
+| `RamGBUsed` | `float` | no | — |
+| `NFacetsPlanned` | `int` | no | — |
 | `Flags` | `str` | no | — |
 | `Plan` | `File` | no | — |
 
@@ -1532,17 +1532,13 @@ ddfacet-target:
 **Purpose:** Suggest killMS NCPU, chunk size and solution interval from a memory budget.
 
 **Kind:** memory plan  
-**Image:** `ghcr.io/tmolteno/killms:v3.15.8`  
+**Image:** `ghcr.io/tmolteno/killms:v3.15.11`  
 **Command:** inline Python  
 
 ### Description
 
-Suggest --NCPU (and the parameters that trade against it) for a killMS
-solve, from the solve geometry and a memory budget.  Reads the MS for
-its row/channel/antenna counts when one is given; pass NRows/NChan/NA
-instead when it cannot be read.  Prints the arithmetic, including how
-sensitive the answer is to the per-worker peak, which is measured on
-one dataset only.
+Plan a killMS solve: NCPU, and whether the calibrated peak-memory model (memplan-model.json), evaluated on the
+MS's total rows and channels, fits the budget.  TChunk and NChanSols pass through (memory is flat in them).
 
 ### Notes
 
@@ -1566,23 +1562,19 @@ branch on it.
 ### Inputs
 
 <details>
-<summary><code>Inputs</code> (14 parameters)</summary>
+<summary><code>Inputs</code> (10 parameters)</summary>
 
 | Parameter | Type | Required | Default | Description |
 |---|---|---|---|---|
-| `MS` | `MS` | no | — | measurement set to size the plan with |
-| `RamGB` | `float` | no | — | memory the solve may use -- what is actually available (MemAvailable, or the container limit), not the machine's total.  Default: exactly that, read when the step runs |
-| `NDir` | `int` | no | `1` | directions in the solve, from the NodesFile/ClusterCat |
+| `MS` | `MS` | yes | — | the MS the solve reads; its tables are read for the total rows and channels |
+| `FieldID` | `int` | no | `0` | the MS field (kMS --FieldID) |
+| `SSDModel` | `bool` | no | `False` | the base DicoModel holds SSD (SSD2 / SSD3) components rather than HMP ones |
+| `RamGB` | `float` | no | — | memory the solve may use, GB.  Default: what the host has available when the step runs -- MemAvailable, capped by the cgroup memory limit if there is one |
 | `WantNCPU` | `int` | no | — | worker count you would like; also the cap.  Default: the usable cores (the CPU affinity set) |
-| `InProcess` | `bool` | no | `True` | the in-process solver (killMS >= v3.9): threads, with the model grids inside the parent, so no shared-grid term and a 512 MiB per-thread margin unless GridGB/WorkerMiB are given.  false = the forked pool the model was calibrated on |
-| `NRows` | `float` | no | — | rows per antenna per time chunk, when no MS is given; the average, not the peak |
-| `NChan` | `int` | no | `1` | channels per task (normally the MS channel count) |
-| `NA` | `int` | no | — | antenna count, when no MS is given |
-| `ObsHours` | `float` | no | — | observation length, to report how many chunks the solve runs as |
-| `GridGB` | `float` | no | — | shared model grids in /dev/shm, if known (measured 37 GiB on mergA_tim).  The weakest number in the model; measure it from a prior run of the same DDF cache if you can |
-| `ParentGB` | `float` | no | — | parent process peak, if known (measured ~15-16 GiB on mergA_tim) |
-| `WorkerMiB` | `float` | no | — | per-worker peak from a real VmHWM measurement; overrides the built-in 6500 MiB, which is the floor measured on mergA_tim |
-| `GridsAreDiskBacked` | `bool` | no | `False` | the shared grids sit on a disk-backed directory bound over /dev/shm (how the meerkat pipeline runs), so they are page cache rather than RAM the budget must hold.  They are still reported, and still have to fit that directory |
+| `Margin` | `float` | no | `1.25` | safety factor on the predicted peak before it is compared with RamGB |
+| `FailOnNoFit` | `bool` | no | `True` | fail the step (exit 1) when the plan does not fit; false = report Fits false and carry on |
+| `TChunkWant` | `float` | no | `0.5` | --TChunk (hours), passed through as the TChunk output; memory is flat in it |
+| `NChanSolsWant` | `int` | no | `20` | --NChanSols, passed through as the NChanSols output; memory is flat in it |
 | `PlanOut` | `File` | no | `killms-memory-plan.json` | where to write the plan, as JSON |
 
 </details>
@@ -1595,6 +1587,8 @@ branch on it.
 | `TChunk` | `float` | no | — |
 | `NChanSols` | `int` | no | — |
 | `PeakGB` | `float` | no | — |
+| `PlannedGB` | `float` | no | — |
+| `RamGBUsed` | `float` | no | — |
 | `Flags` | `str` | no | — |
 | `Plan` | `File` | no | — |
 | `Fits` | `bool` | no | — |
