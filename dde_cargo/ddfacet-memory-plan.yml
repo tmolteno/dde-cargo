@@ -90,7 +90,7 @@ vars:
       registry: ghcr.io/tmolteno
       name: ddfacet
       # The planner runs DDFacet's tessellation, so pin it to the imaging pin (tools/check-pins.py).
-      version: v0.16.9
+      version: v0.16.10
 
 cabs:
     ddfacet-memory-plan:

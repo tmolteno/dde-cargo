@@ -10,6 +10,36 @@ DDFacet's `CHANGES.md` and commit history, killMS's commit history, and
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-10-21
+
+### Container images
+
+- DDFacet `ghcr.io/tmolteno/ddfacet:v0.16.9` → `v0.16.10`.
+- killMS `ghcr.io/tmolteno/killms:v3.15.11` → `v3.15.12`.
+- Image pins are those of the cabs synced from meerkat_imaging, equal to the latest upstream tags.
+
+### DDFacet
+
+#### `v0.16.10` (2026-10-21)
+- Require casacure >= 3.8.35: addcols extends the table in place (tmolteno/casacure#22) (`247862eb`)
+
+### killMS
+
+#### `v3.15.12` (2026-10-21)
+- Require casacure >= 3.8.35: addcols extends the table in place (tmolteno/casacure#22) (`f3833e4`)
+
+### Cab changes (meerkat_imaging)
+
+meerkat_imaging `101e973` → `48009e9`:
+
+- Image pin updates only.
+
+### Packaging
+
+- Package version bumped from `0.2.1` to `0.2.2`.
+- Cabs and schemas synced from `meerkat_imaging/cabs` (`invoke sync`).
+- Changelog generated from the `../DDFacet` and `../killMS` commit history and meerkat_imaging's cab history.
+
 ## [0.2.1] - 2026-10-20
 
 ### Container images
@@ -247,7 +277,8 @@ meerkat_imaging `529047a` → `76ccf43`:
   plus the `ddfacet-memory-plan` and `killms-memory-plan` cabs.
 - PyPI trusted publishing (OIDC) on `vX.Y.Z` tags.
 
-[Unreleased]: https://github.com/tmolteno/dde-cargo/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/tmolteno/dde-cargo/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/tmolteno/dde-cargo/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/tmolteno/dde-cargo/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/tmolteno/dde-cargo/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/tmolteno/dde-cargo/compare/v0.1.0...v0.1.1
