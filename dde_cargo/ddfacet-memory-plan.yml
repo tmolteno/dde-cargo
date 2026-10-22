@@ -561,7 +561,7 @@ cabs:
 
             def plan_ddf(model, GD, ms, ram_gb, margin=1.25, step="initial", mode=None,
                          chunk_choices=(4.0, 2.0, 1.0, 0.5), prefer="fidelity", chan_steps=(1, 2, 3, 4, 5, 6, 8, 10, 16, 20),
-                         proxy_nodes=0):
+                         proxy_nodes=0, kms=None):
                 """Search ChunkHours x ChanStep for the largest ChunkHours whose predicted peak x margin fits ram_gb.
 
                 step: target | initial | finalize | corrected, or "clustered" = the largest of initial / finalize / corrected
@@ -572,7 +572,11 @@ cabs:
                 taken.  prefer 'speed': the largest chunk wins even if it costs band (the smallest ChanStep that fits that
                 chunk is used).  Memory is flat in NCPU (phase 1), so NCPU is not part of the search.
                 Returns (best or None, every combination tried, {step: (nfacets, sum pad^2)}); an entry is dict(chunk_hours,
-                chan_step, nchan, rows_chunk, peak_gb, planned_gb, fits, limit_step)."""
+                chan_step, nchan, rows_chunk, peak_gb, planned_gb, fits, limit_step, by_step).
+                kms: None, or dict(ndegrid=NChanSols[, rows_total, nchan]) to also require the killMS solve to fit.  The solve is a separate process
+                that runs after the finalize clean, flat in ChunkHours / ChanStep (it reads the whole MS and every channel), so it is one more entry
+                of by_step ("kms") and, when it is the largest, the limit_step.  The facet term uses the sum of pad^2 over ALL facets of the finalize
+                tessellation (CatCentres None, as the plan sees it at the solve): an upper bound of the flux-bearing facets the cab's own plan counts."""
                 import copy
                 steps = CLUSTERED if step == "clustered" else (step,)
                 geoms = {}
@@ -584,6 +588,12 @@ cabs:
                     geoms[st] = (n, p2)
                 base = ddf_inputs_from_gd(GD, ms, mode=mode)
                 sel = GD["Selection"]
+                kms_gb = None
+                if kms is not None:
+                    gk = geoms["finalize"] if "finalize" in geoms else max(geoms.values(), key=lambda g: g[1])
+                    kms_gb = kms_peak(model, kms.get("rows_total", ms["nrows"]), kms.get("nchan", ms["nchan"]),
+                                      ssd=str(base["mode"]).upper().startswith("SSD"), ndegrid=int(kms["ndegrid"]), pad2_nz=gk[1],
+                                      npix=GD["Image"]["NPix"])[0]
                 feasible, allp = [], []
                 for cs in chan_steps:
                     nch = nchan_selected(ms["nchan"], sel.get("ChanStart"), sel.get("ChanEnd"), cs)
@@ -591,6 +601,8 @@ cabs:
                         rows = chunk_rows(ms["times"], ch)
                         per = {st: ddf_peak(model, geoms[st][1], geoms[st][0], rows_chunk=rows, nchan=nch, step=st, **base)[0]
                                for st in steps}
+                        if kms_gb is not None:
+                            per["kms"] = kms_gb
                         lim = max(per, key=per.get)
                         peak = per[lim]
                         e = dict(chunk_hours=ch, chan_step=cs, nchan=nch, rows_chunk=rows, peak_gb=peak,
@@ -612,48 +624,76 @@ cabs:
             _MODEL_JSON = r'''{
               "schema": 2,
               "ddf_form": "D",
-              "source_note": "kMS refit 2026-10-20 (a + X1 + X2n + XS) on spark memplan-p1 + p2 + p3 + x86 #63; the DDF block is unchanged from the 2026-10-18 fit (phase 2b)",
-              "fitted": "2026-10-18",
-              "kms_fitted": "2026-10-20",
+              "source_note": "DDF refit 2026-10-22 (kms-refit): spark p1 + p2(+2b) + p5 -- p5 adds the corrected step at NPix 3465-5625 with the pipeline's auto-facet centres (research section 11) -- JOINT with the 141 x86 #63 points, whose geometry comes from tools/memplan-x86-geom.tsv because the 2026-10-20 prune deleted their DicoFacets.  kMS block unchanged from 2026-10-21: refit on killms v3.15.12 / ddfacet v0.16.10 (casacure 3.8.35), parity harness, fresh MS, a + X1 + X2n + XS on spark memplan-p5 (24 points); x86 #63 kMS points not used (stale MS state)",
+              "fitted": "2026-10-22",
               "metric": "maxrss",
               "units": "GB = 1e9 B of peak max RSS of the DDF.py / kMS.py process",
               "generated_by": "tools/memplan-fit.py --write-model",
               "design": "research/MEMORY_PLAN_CALIBRATION.md",
               "data": {
-                "spark_runs": [
+                "kms_runs": [
                   {
-                    "file": "memplan-p1/runs.tsv",
+                    "file": "memplan-p5/runs.tsv",
+                    "sha256": "f28427537465e1d3"
+                  }
+                ],
+                "kms_x86_roots": [],
+                "ddf_runs": [
+                  {
+                    "file": "research/memplan-p1-runs.tsv",
                     "sha256": "5a84066ae97cf4cb"
                   },
                   {
-                    "file": "memplan-p2/runs.tsv",
+                    "file": "research/memplan-p2-runs.tsv",
                     "sha256": "d15598bb98ac0261"
                   },
                   {
-                    "file": "memplan-p3/runs.tsv",
-                    "sha256": "d163d673692a7020"
+                    "file": "research/memplan-p5-runs.tsv",
+                    "sha256": "fa5726570ac1f9a9"
                   }
                 ],
-                "x86_roots": [
+                "ddf_x86_roots": [
                   "p63-seeds",
                   "p63-pilot",
                   "p63-sweep"
                 ],
-                "ddf_note": "ddf block: spark p1 + p2(+2b) + x86, as fitted 2026-10-18 (memplan-model.json at b94bda0)"
+                "ddf_x86_geom": {
+                  "file": "memplan-x86-geom.tsv",
+                  "sha256": "1d10685261074ac2",
+                  "points_filled": 141
+                }
+              },
+              "kms_fitted": "2026-10-21",
+              "kms": {
+                "coefficients": {
+                  "a": 4.07751959718835,
+                  "X1": 20.462754530801483,
+                  "X2n": 0.6973619920208876,
+                  "XS": 734.8050773808027
+                },
+                "features": {
+                  "a": "constant floor (GB)",
+                  "X1": "rows_total (the WHOLE MS, not a TChunk) * nchan, times 8e-9",
+                  "X2n": "NDegridBand (= NChanSols: kMS.py sets Freq.NDegridBand from it) * sum of NpixFacetPadded^2 over the facets that hold model flux (a model component pixel inside the facet's padded square), times 8e-9: the predict's per-facet model grids (complex64, one plane per degrid band; killMS keeps them only for facets with flux)",
+                  "XS": "[sky model is SSD] * NPix^2 * 1e-9: an SSD DicoModel is a dense image (Comp Vals, nterms x NPix x NPix) that the predict expands, so its cost follows the image size (HMP models are sparse pixel lists)"
+                },
+                "npoints": 24,
+                "underdetermined": false,
+                "dropped_terms": []
               },
               "ddf": {
                 "coefficients": {
-                  "a": 2.859072759137936,
-                  "X1a": 6.432169915424643,
-                  "X1b": 1.2758777554575422,
-                  "X3": 5.545856734216099,
-                  "X4b": 1317.6617067746115,
-                  "X4c": 320.69336316668733,
-                  "mode=SSD2": 7.244818351988027,
-                  "mode=SSD3": 4.525180971250868,
-                  "step=target": 4.677938712402524,
-                  "step=finalize": -0.8285736122373915,
-                  "step=corrected": -0.5404716289562581
+                  "a": 1.65320261261094,
+                  "X1a": 6.926467212457343,
+                  "X1b": 1.3481707237466818,
+                  "X3": 6.367026334441284,
+                  "X4b": 1153.5725630276554,
+                  "X4c": 439.3465588376699,
+                  "mode=SSD2": 7.440557301556507,
+                  "mode=SSD3": 5.124512257042504,
+                  "step=target": 5.036426414047182,
+                  "step=finalize": -2.949683576311721,
+                  "step=corrected": -0.7556531798652627
                 },
                 "features": {
                   "a": "constant floor (GB)",
@@ -668,24 +708,7 @@ cabs:
                   "step=finalize": "1 for the finalize step (GB added)",
                   "step=corrected": "1 for the DD-corrected step (GB added)"
                 },
-                "npoints": 181,
-                "underdetermined": false,
-                "dropped_terms": []
-              },
-              "kms": {
-                "coefficients": {
-                  "a": 7.888278507526808,
-                  "X1": 20.600866572952196,
-                  "X2n": 0.5187324744643504,
-                  "XS": 757.1023690300507
-                },
-                "features": {
-                  "a": "constant floor (GB)",
-                  "X1": "rows_total (the WHOLE MS, not a TChunk) * nchan, times 8e-9",
-                  "X2n": "NDegridBand (= NChanSols: kMS.py sets Freq.NDegridBand from it) * sum of NpixFacetPadded^2 over the facets that hold model flux (a model component pixel inside the facet's padded square), times 8e-9: the predict's per-facet model grids (complex64, one plane per degrid band; killMS keeps them only for facets with flux)",
-                  "XS": "[sky model is SSD] * NPix^2 * 1e-9: an SSD DicoModel is a dense image (Comp Vals, nterms x NPix x NPix) that the predict expands, so its cost follows the image size (HMP models are sparse pixel lists)"
-                },
-                "npoints": 73,
+                "npoints": 217,
                 "underdetermined": false,
                 "dropped_terms": []
               }

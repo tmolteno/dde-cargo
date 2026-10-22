@@ -1576,7 +1576,7 @@ branch on it.
 | `Margin` | `float` | no | `1.25` | safety factor on the predicted peak before it is compared with RamGB |
 | `FailOnNoFit` | `bool` | no | `True` | fail the step (exit 1) when the plan does not fit; false = report Fits false and carry on |
 | `TChunkWant` | `float` | no | `0.5` | --TChunk (hours), passed through as the TChunk output; memory is flat in it |
-| `NChanSolsWant` | `int` | no | `20` | --NChanSols, passed through as the NChanSols output; memory is flat in it |
+| `NChanSolsWant` | `int` | no | `20` | --NChanSols, passed through as the NChanSols output.  It sets NDegridBand of the predict, so it IS a memory knob (the facet-grid term scales with it, research section 9); the plan evaluates the model at this value |
 | `PlanOut` | `File` | no | `killms-memory-plan.json` | where to write the plan, as JSON |
 
 </details>
