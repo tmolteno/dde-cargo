@@ -15,6 +15,7 @@ SYNC_FILES = (
     "killms-memory-plan.yml",
     "ddfacet_stimela_inputs_schema.yml",
     "killms_stimela_schema.yml",
+    "pick-reference-ant.yml",
 )
 MEMORY_PLAN_CABS = {
     "ddfacet-memory-plan.yml": "ddfacet-memory-plan",
@@ -60,3 +61,17 @@ def test_memory_plan_cabs_pin_the_image_pins_of_ddfacet_yml():
         yaml.safe_load((PACKAGE / "killms-memory-plan.yml").read_text())["vars"]["killms-memory-plan"]["image"]["version"],
     )
     assert got == pins
+
+
+def test_pick_reference_ant_runs_on_the_ddfacet_pin():
+    """pick-reference-ant.yml carries no vars of its own: its image `_use`s
+    ddfacet.yml's vars.tim-molteno.images, so a recipe must include it after
+    ddfacet.yml and it always runs on the packaged DDFacet pin (unlike the
+    memory-plan cabs, which define their own vars to stay standalone)."""
+    doc = yaml.safe_load((PACKAGE / "pick-reference-ant.yml").read_text())
+    assert set(doc.get("cabs") or {}) == {"pick-reference-ant"}
+    assert "vars" not in doc
+    cab = doc["cabs"]["pick-reference-ant"]
+    assert cab["image"] == {"_use": "vars.tim-molteno.images", "name": "tmolteno/ddfacet"}
+    # stimela refuses a cab whose name is both an input and an output
+    assert not set(cab.get("inputs") or {}) & set(cab.get("outputs") or {})

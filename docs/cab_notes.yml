@@ -446,3 +446,37 @@ killms-memory-plan:
         NCPU: =steps.killms-memory-plan.NCPU
         TChunk: =steps.killms-memory-plan.TChunk
         NChanSols: =steps.killms-memory-plan.NChanSols
+
+pick-reference-ant:
+  purpose: "Pick the reference antenna from flag fraction and distance to the array centre."
+  notes: |
+    Scores every antenna on the two things a refant needs:
+    `score = (1 - flagged_fraction) * d_median / (d_median + distance)`, where
+    the flagged fraction counts cross-baseline visibility samples only
+    (autocorrelations are excluded: a flagging stage usually flags that whole
+    class) and the distance is ITRF metres from the centroid of the antennas
+    that have data.  Ties break by lower flagged fraction, then distance, then
+    name -- deterministic.  Antennas with no cross-baseline rows are
+    ineligible.  Meant to run as the last step of a stage-0 flagging pass, on
+    the averaged MS, before anything solves against an antenna.
+
+    The full auditable record (formula, centroid, every antenna's numbers, the
+    chosen one, warnings) is written to `score-json`; `reference_ant` and the
+    chosen antenna's numbers are cab outputs, so the next stage can take its
+    refant as `=steps.<this-step>.reference_ant`.
+
+    **Include order:** the cab's image is `_use: vars.tim-molteno.images`,
+    which is defined in `ddfacet.yml` -- include this file after
+    `(dde_cargo): ddfacet.yml`.
+
+    **Working-directory requirement:** `lib` defaults to
+    `tools/pick_reference_ant.py`, so a `meerkat_imaging` checkout must sit
+    beside the recipe (stimela binds the working directory into the
+    container), as for `autofacet`.
+  example: |
+    pick-refant:
+      cab: pick-reference-ant
+      params:
+        ms: =recipe.target-ms
+        score-json: reference-ant.json
+    # stage 1 then solves against =steps.pick-refant.reference_ant

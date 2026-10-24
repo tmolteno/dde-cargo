@@ -1,0 +1,118 @@
+# stimela cab: pick-reference-ant -- the reference antenna stage 1 solves against.
+#
+# Runs as the LAST step of stage 0 (white-belt-0-flagging.yml), on the averaged MS *after* skarabina
+# has flagged it, and scores every antenna on the two things a refant needs:
+#
+#   score = (1 - flagged_fraction) * d_median / (d_median + distance)
+#
+#   * flagged_fraction -- of the cross-baseline visibility samples (rows x channels x correlations,
+#     autocorrelations excluded: stage 0's `autos` verb flags that whole class, so they say nothing
+#     about how an antenna performs on the baselines the solve uses) on baselines involving the
+#     antenna, the fraction FLAGged.  A row with FLAG_ROW set counts as fully flagged.
+#   * distance -- |POSITION - mean(POSITION)| over the antennas that have data (ITRF metres from the
+#     ANTENNA subtable; the same "nearest the array centroid" geometry meerkat_analyze.py uses), with
+#     d_median the median of those distances, so the centre factor is 1.0 at the centroid and 0.5 at
+#     the median-distance antenna.
+#
+# Both factors are in (0, 1]: a clean centroid antenna scores 1.0; a 90%-flagged antenna cannot score
+# above 0.1; an outlying antenna is damped by baseline length.  Ties break by lower flagged fraction,
+# then distance, then name -- deterministic.  Antennas with no cross-baseline rows are ineligible
+# (score null, reason in the record).
+#
+# WHY HERE AND NOT IN skarabina-analyze: ms_content reads index columns only and says so ("flag
+# fractions are skarabina --summary's job"; it never touches the visibility cubes, which is why
+# analyze is cheap and runs at the start of every stage).  skarabina --summary prints an overall
+# percentage but has no per-antenna block (caltable.summary()'s docstring promises one; the MS
+# summary does not have it), so there is no per-antenna statistic to consume -- and moving it into
+# skarabina would need an image release for one number the pipeline wants exactly once, at the end of
+# stage 0.  This step reads FLAG itself, in row chunks (only FLAG/FLAG_ROW/ANTENNA1/ANTENNA2), and
+# writes the per-antenna table the report would have printed to reference-ant.json instead.  If
+# skarabina --summary later grows a machine-readable per-antenna block, this cab can read it; the
+# score stays here either way (choosing a refant is pipeline policy, not flagging).
+#
+# The image is dde-cargo's vars.tim-molteno.images (the DDFacet image plan-uvmax runs its casacore
+# code in) -- resolved through cabs/tcam-cabs.yml's (dde_cargo) include, so this file must be
+# included AFTER it.
+#
+# Files read through stimela File inputs (bind-mounted into the container like any File): lib
+# (tools/pick_reference_ant.py) and, written, score-json (reference-ant.json, the auditable record:
+# formula, centroid, every antenna's numbers, the chosen one, any warnings).  Run from the repo root
+# or pass absolute paths.
+#
+# Outputs feed yellow-belt.yml: reference_ant is stage 1's refant (through initial-flagging's
+# recipe-level output); the others land in the log for humans.
+cabs:
+    pick-reference-ant:
+        info: Pick stage 1's reference antenna by score (flagged-visibility fraction x distance from the array centre).
+        image:
+            _use: vars.tim-molteno.images
+            name: tmolteno/ddfacet
+        inputs:
+            ms:
+                dtype: MS
+                required: true
+                info: the averaged MS, after stage 0's flagging (read-only)
+            config-refant:
+                dtype: str
+                default: ""
+                info: >-
+                  the config's reference-ant, recorded in score-json for comparison with the score's
+                  pick; it does NOT override the score ("" when the config does not set one)
+            lib:
+                dtype: File
+                default: tools/pick_reference_ant.py
+                info: the scoring code, imported by the command below
+            score-json:
+                dtype: File
+                default: reference-ant.json
+                must_exist: false
+                info: the record written for the run (per-antenna table, chosen antenna, warnings)
+            chunk-rows:
+                dtype: int
+                default: 200000
+                info: "rows per FLAG read (memory: chunk-rows x nchan x ncorr bytes)"
+        outputs:
+            # required: true is what makes a recipe-level output alias of these
+            # work: prevalidation seeds a step's declared outputs into its
+            # params only when the schema is required, and that is what marks
+            # the alias `from_step` -- without it the nested recipe's outputs
+            # dict stays empty at run time and a consumer of
+            # =steps.<that-step>.<output> fails with "invalid inputs"
+            # (measured on stimela 2.1.4, 2026-10-24; plan-uvmax's outputs do
+            # not need it because it is consumed at the same recipe level).
+            reference_ant:
+                dtype: str
+                required: true
+                info: the chosen reference antenna name (stage 1's refant)
+            flagged_fraction:
+                dtype: float
+                required: true
+                info: chosen antenna's flagged cross-baseline fraction (0..1)
+            distance_m:
+                dtype: float
+                required: true
+                info: chosen antenna's distance from the array centroid, ITRF metres
+            score:
+                dtype: float
+                required: true
+                info: chosen antenna's score (0..1)
+        flavour:
+            kind: python-code
+            input_dict: args
+        command: |
+            import importlib.util
+
+            _spec = importlib.util.spec_from_file_location("pick_reference_ant", args["lib"])
+            M = importlib.util.module_from_spec(_spec)
+            _spec.loader.exec_module(M)
+
+            record = M.pick_reference_ant(
+                ms=args["ms"],
+                config_refant=args["config-refant"],
+                json_path=args["score-json"],
+                chunk_rows=int(args["chunk-rows"]),
+            )
+            reference_ant = record["chosen"]["name"]
+            flagged_fraction = float(record["chosen"]["flagged_fraction"])
+            distance_m = float(record["chosen"]["distance_m"])
+            score = float(record["chosen"]["score"])

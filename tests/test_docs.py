@@ -15,6 +15,7 @@ CAB_FILES = (
     ROOT / "dde_cargo" / "ddfacet.yml",
     ROOT / "dde_cargo" / "ddfacet-memory-plan.yml",
     ROOT / "dde_cargo" / "killms-memory-plan.yml",
+    ROOT / "dde_cargo" / "pick-reference-ant.yml",
 )
 
 

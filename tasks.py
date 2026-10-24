@@ -23,7 +23,7 @@ and ``../killMS`` checkouts -- the release refuses otherwise):
 1. checks that meerkat_imaging's cab files are committed, reads the old
    (committed) DDFacet/killMS pins, the latest upstream release tags, and
    REFUSES when the cabs to be synced do not pin exactly those tags;
-2. syncs the five cab files from meerkat_imaging into ``dde_cargo/`` and records
+2. syncs the six cab files from meerkat_imaging into ``dde_cargo/`` and records
    the meerkat_imaging commit (``dde_cargo/meerkat-sync.json``);
 3. generates a changelog section from the upstream commit history between the
    old and new tags plus meerkat_imaging's cab commits since the previously
@@ -93,12 +93,15 @@ KILLMS_MP_YML = ROOT / "dde_cargo" / "killms-memory-plan.yml"
 PACKAGE_DIR = ROOT / "dde_cargo"
 SYNC_RECORD = PACKAGE_DIR / "meerkat-sync.json"
 # the files copied from meerkat_imaging/cabs into dde_cargo/ (never edited here)
+# NOTE: the first three carry the image pins (the [:3] slices below read them);
+# append new files at the end.
 SYNC_FILES = (
     "ddfacet.yml",
     "ddfacet-memory-plan.yml",
     "killms-memory-plan.yml",
     "ddfacet_stimela_inputs_schema.yml",
     "killms_stimela_schema.yml",
+    "pick-reference-ant.yml",
 )
 
 VERSION_RE = re.compile(r"^v?(\d+(?:\.\d+)+)$")
@@ -788,7 +791,7 @@ def version(c) -> None:
     }
 )
 def sync(c, check: bool = False) -> None:
-    """Copy the five cab files from meerkat_imaging/cabs into dde_cargo/ and record the commit.
+    """Copy the six cab files from meerkat_imaging/cabs into dde_cargo/ and record the commit.
 
     The cabs are edited in meerkat_imaging (MEERKAT_REPO, default ../meerkat_imaging), never here.  Refuses
     when those files are uncommitted there.  `release` runs this first; run `invoke docs` after a sync

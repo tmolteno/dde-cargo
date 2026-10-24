@@ -117,6 +117,7 @@ def test_package_data_is_installed():
         KILLMS_SCHEMA_FILE,
         DDFACET_MEMORY_PLAN_FILE,
         KILLMS_MEMORY_PLAN_FILE,
+        "pick-reference-ant.yml",
     ):
         assert _package_file(name).is_file(), f"{name} is missing from the package"
 

@@ -1,10 +1,11 @@
 {
-  "meerkat_imaging_commit": "cacbad094576638e6acdaffb661e471a707e7b10",
+  "meerkat_imaging_commit": "31f3f788b1d5578daff017a0279a27dc4d3391dc",
   "files": {
     "ddfacet.yml": "8a23bd0fd99bc82167344d1f8cb2e2ae19b430050878c36a797690421ef3bd96",
     "ddfacet-memory-plan.yml": "844cb9ae3fab07dfd00caf4a1e460159790b34655c4b23dfcf2083d6bbb1c785",
     "killms-memory-plan.yml": "d63cf2dd508a30a7e22539517cd8f3b94472e46992f10fe3e0f3fb7ca06880e0",
     "ddfacet_stimela_inputs_schema.yml": "b7ec93fea1c9375baa74e870e3f049779035bc67d101b347bf0aedc9f2116af1",
-    "killms_stimela_schema.yml": "6334574119e3f20a2a60efca7a9782d5f4d37d50478031262287bc97cc65df8d"
+    "killms_stimela_schema.yml": "6334574119e3f20a2a60efca7a9782d5f4d37d50478031262287bc97cc65df8d",
+    "pick-reference-ant.yml": "95799702539c3041426dfea9141252cde08166c8aac6601806e0f88f4d1baa04"
   }
 }

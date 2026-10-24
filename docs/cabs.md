@@ -31,6 +31,7 @@ through `kMS.py`.
 - [`snapnodes`](#cab-snapnodes)
 - [`ddfacet-memory-plan`](#cab-ddfacet-memory-plan)
 - [`killms-memory-plan`](#cab-killms-memory-plan)
+- [`pick-reference-ant`](#cab-pick-reference-ant)
 
 ## At a glance
 
@@ -49,12 +50,15 @@ through `kMS.py`.
 | [`snapnodes`](#cab-snapnodes) | python-code | Move DD direction nodes onto the dominant modelled source in each cell. | `ghcr.io/tmolteno/ddfacet:v0.16.10` |
 | [`ddfacet-memory-plan`](#cab-ddfacet-memory-plan) | memory plan | Suggest DDFacet NCPU, chunk size and channel step from a memory budget. | `ghcr.io/tmolteno/ddfacet:v0.16.10` |
 | [`killms-memory-plan`](#cab-killms-memory-plan) | memory plan | Suggest killMS NCPU, chunk size and solution interval from a memory budget. | `ghcr.io/tmolteno/killms:v3.15.12` |
+| [`pick-reference-ant`](#cab-pick-reference-ant) | python-code | Pick the reference antenna from flag fraction and distance to the array centre. | `ghcr.io/tmolteno/ddfacet:v0.16.10` |
 
 ## Typical wiring
 
 Only `ddfacet.yml` is essential.  The memory-plan cabs are optional and
-must be wired ahead of the step they plan.  Include cult-cargo's `bdsf.yml`
-before `ddfacet.yml` because of the `bdsf.catalog` image override:
+must be wired ahead of the step they plan.  `pick-reference-ant` must
+come after `ddfacet.yml` (its image resolves ddfacet.yml's
+`vars.tim-molteno.images`).  Include cult-cargo's `bdsf.yml` before
+`ddfacet.yml` because of the `bdsf.catalog` image override:
 
 ```yaml
 _include:
@@ -62,6 +66,7 @@ _include:
       - bdsf.yml
   - (dde_cargo):
       - ddfacet.yml
+      - pick-reference-ant.yml
       - ddfacet-memory-plan.yml
       - killms-memory-plan.yml
 ```
@@ -1610,6 +1615,82 @@ killms-target:
     NCPU: =steps.killms-memory-plan.NCPU
     TChunk: =steps.killms-memory-plan.TChunk
     NChanSols: =steps.killms-memory-plan.NChanSols
+```
+
+---
+
+<a id="cab-pick-reference-ant"></a>
+## `pick-reference-ant`
+
+**Purpose:** Pick the reference antenna from flag fraction and distance to the array centre.
+
+**Kind:** python-code  
+**Image:** `ghcr.io/tmolteno/ddfacet:v0.16.10`  
+**Command:** inline Python  
+
+### Description
+
+Pick stage 1's reference antenna by score (flagged-visibility fraction x distance from the array centre).
+
+### Notes
+
+Scores every antenna on the two things a refant needs:
+`score = (1 - flagged_fraction) * d_median / (d_median + distance)`, where
+the flagged fraction counts cross-baseline visibility samples only
+(autocorrelations are excluded: a flagging stage usually flags that whole
+class) and the distance is ITRF metres from the centroid of the antennas
+that have data.  Ties break by lower flagged fraction, then distance, then
+name -- deterministic.  Antennas with no cross-baseline rows are
+ineligible.  Meant to run as the last step of a stage-0 flagging pass, on
+the averaged MS, before anything solves against an antenna.
+
+The full auditable record (formula, centroid, every antenna's numbers, the
+chosen one, warnings) is written to `score-json`; `reference_ant` and the
+chosen antenna's numbers are cab outputs, so the next stage can take its
+refant as `=steps.<this-step>.reference_ant`.
+
+**Include order:** the cab's image is `_use: vars.tim-molteno.images`,
+which is defined in `ddfacet.yml` -- include this file after
+`(dde_cargo): ddfacet.yml`.
+
+**Working-directory requirement:** `lib` defaults to
+`tools/pick_reference_ant.py`, so a `meerkat_imaging` checkout must sit
+beside the recipe (stimela binds the working directory into the
+container), as for `autofacet`.
+
+### Inputs
+
+<details>
+<summary><code>Inputs</code> (5 parameters)</summary>
+
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `ms` | `MS` | yes | — | the averaged MS, after stage 0's flagging (read-only) |
+| `config-refant` | `str` | no | `` | the config's reference-ant, recorded in score-json for comparison with the score's pick; it does NOT override the score ("" when the config does not set one) |
+| `lib` | `File` | no | `tools/pick_reference_ant.py` | the scoring code, imported by the command below |
+| `score-json` | `File` | no | `reference-ant.json` | the record written for the run (per-antenna table, chosen antenna, warnings) |
+| `chunk-rows` | `int` | no | `200000` | rows per FLAG read (memory: chunk-rows x nchan x ncorr bytes) |
+
+</details>
+
+### Outputs
+
+| Output | Type | Required | Implicit |
+|---|---|---|---|
+| `reference_ant` | `str` | yes | — |
+| `flagged_fraction` | `float` | yes | — |
+| `distance_m` | `float` | yes | — |
+| `score` | `float` | yes | — |
+
+### Example
+
+```yaml
+pick-refant:
+  cab: pick-reference-ant
+  params:
+    ms: =recipe.target-ms
+    score-json: reference-ant.json
+# stage 1 then solves against =steps.pick-refant.reference_ant
 ```
 
 ---

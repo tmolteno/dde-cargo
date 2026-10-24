@@ -31,6 +31,7 @@ Full parameter reference: [docs/cabs.md](https://github.com/tmolteno/dde-cargo/b
 | [`snapnodes`][cab-snapnodes] | Snap DD nodes onto their dominant modelled source | `ghcr.io/tmolteno/ddfacet:v0.16.10` |
 | [`ddfacet-memory-plan`][cab-ddfacet-memory-plan] | Suggest DDFacet memory and parallel settings | `ghcr.io/tmolteno/ddfacet:v0.16.10` |
 | [`killms-memory-plan`][cab-killms-memory-plan] | Suggest killMS memory and parallel settings | `ghcr.io/tmolteno/killms:v3.15.12` |
+| [`pick-reference-ant`][cab-pick-reference-ant] | Pick the reference antenna from flag fraction and array-centre distance | `ghcr.io/tmolteno/ddfacet:v0.16.10` |
 
 All images are published for amd64 and arm64.
 
@@ -47,6 +48,7 @@ All images are published for amd64 and arm64.
 [cab-snapnodes]: https://github.com/tmolteno/dde-cargo/blob/main/docs/cabs.md#cab-snapnodes
 [cab-ddfacet-memory-plan]: https://github.com/tmolteno/dde-cargo/blob/main/docs/cabs.md#cab-ddfacet-memory-plan
 [cab-killms-memory-plan]: https://github.com/tmolteno/dde-cargo/blob/main/docs/cabs.md#cab-killms-memory-plan
+[cab-pick-reference-ant]: https://github.com/tmolteno/dde-cargo/blob/main/docs/cabs.md#cab-pick-reference-ant
 
 ## Install
 
@@ -73,6 +75,7 @@ _include:
       - bdsf.yml
   - (dde_cargo):
       - ddfacet.yml
+      - pick-reference-ant.yml
       - ddfacet-memory-plan.yml
       - killms-memory-plan.yml
 ```
@@ -104,8 +107,12 @@ meerkat_imaging checkout (`tests/test_sync.py` keeps it that way).
 Notes carried over from the upstream cab comments:
 
 * The `autofacet` cab imports `auto_facet_tool/auto_facet.py` from the
-  *working directory*, so it needs a checkout of `meerkat_imaging` beside the
-  recipe (stimela binds the working directory into the container).
+  *working directory*, and `pick-reference-ant` defaults its `lib` input to
+  `tools/pick_reference_ant.py`, so both need a checkout of `meerkat_imaging`
+  beside the recipe (stimela binds the working directory into the container).
+* `pick-reference-ant.yml` must be included **after** `ddfacet.yml`: its
+  `image` resolves `vars.tim-molteno.images` from `ddfacet.yml`'s vars block,
+  so it always runs on the same DDFacet pin as the imaging cab.
 * The memory-plan cabs pin their image "to whatever the recipe uses": a recipe
   with its own image var should override `image:` on the cab instead of
   editing the package.
@@ -168,9 +175,10 @@ Their source is [meerkat_imaging](https://github.com/tmolteno/meerkat_imaging)'s
 |---|---|
 | `ddfacet.yml`, `ddfacet_stimela_inputs_schema.yml`, `killms_stimela_schema.yml` | same names in `dde_cargo/` |
 | `ddfacet-memory-plan.yml`, `killms-memory-plan.yml` (generated there from `*.yml.in`, `tools/memplan_lib.py` and `memplan-model.json` by `tools/build-memplan-cabs.py`) | same names |
+| `pick-reference-ant.yml` | same name |
 
 ```sh
-invoke sync                    # copy the five files from ../meerkat_imaging (MEERKAT_REPO to override)
+invoke sync                    # copy the six files from ../meerkat_imaging (MEERKAT_REPO to override)
 invoke sync --check            # exit 1 if dde_cargo/ differs
 ```
 
