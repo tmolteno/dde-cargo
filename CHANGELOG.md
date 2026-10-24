@@ -10,6 +10,15 @@ DDFacet's `CHANGES.md` and commit history, killMS's commit history, and
 
 ## [Unreleased]
 
+### Added
+
+- The `pick-reference-ant` cab, synced from meerkat_imaging
+  (`cabs/pick-reference-ant.yml`, its commit `cfd23b8`): scores every antenna
+  by cross-baseline flagged fraction and distance to the array centroid and
+  picks stage 1's reference antenna; the per-antenna record goes to
+  `score-json` and the chosen name is the `reference_ant` output.  Include it
+  after `ddfacet.yml` (its image resolves `vars.tim-molteno.images`).
+
 ## [0.2.3] - 2026-10-22
 
 ### Container images
