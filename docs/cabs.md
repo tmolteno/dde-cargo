@@ -37,20 +37,20 @@ through `kMS.py`.
 
 | Cab | Kind | Purpose | Image |
 |---|---|---|---|
-| [`bdsf.catalog`](#cab-bdsf-catalog) | image override | Image-only override that runs cult-cargo's PyBDSF catalogue step in the multi-arch DDFacet image. | `ghcr.io/tmolteno/ddfacet:v0.16.10` |
-| [`ddfacet`](#cab-ddfacet) | container | Direction-dependent imager, gridder and deconvolver (`DDF.py`). | `ghcr.io/tmolteno/ddfacet:v0.16.10` |
-| [`killms`](#cab-killms) | container | Direction-dependent gain solver (`kMS.py`). | `ghcr.io/tmolteno/killms:v3.15.12` |
-| [`ddf_makemodel`](#cab-ddf-makemodel) | container | Build a direction-clustering catalogue from a DS9 region (`MakeModel.py`). | `ghcr.io/tmolteno/ddfacet:v0.16.10` |
-| [`ddf_makemask`](#cab-ddf-makemask) | container | Make a FITS clean mask from a restored image (`MakeMask.py`). | `ghcr.io/tmolteno/ddfacet:v0.16.10` |
-| [`dilatemask`](#cab-dilatemask) | python-code | Dilate an external clean mask by N synthesised beams. | `ghcr.io/tmolteno/ddfacet:v0.16.10` |
-| [`clustercat`](#cab-clustercat) | container | Cluster a source catalogue into DD direction nodes (`ClusterCat.py`). | `ghcr.io/tmolteno/ddfacet:v0.16.10` |
-| [`ddfacet-get-npix`](#cab-ddfacet-get-npix) | python-code | Compute the padded image size DDFacet needs. | `ghcr.io/tmolteno/ddfacet:v0.16.10` |
-| [`modelcat`](#cab-modelcat) | python-code | Replace BDSF catalogue fluxes with the first-pass model flux. | `ghcr.io/tmolteno/ddfacet:v0.16.10` |
-| [`autofacet`](#cab-autofacet) | python-code | Derive facet centres from the DI image products. | `ghcr.io/tmolteno/ddfacet:v0.16.10` |
-| [`snapnodes`](#cab-snapnodes) | python-code | Move DD direction nodes onto the dominant modelled source in each cell. | `ghcr.io/tmolteno/ddfacet:v0.16.10` |
-| [`ddfacet-memory-plan`](#cab-ddfacet-memory-plan) | memory plan | Suggest DDFacet NCPU, chunk size and channel step from a memory budget. | `ghcr.io/tmolteno/ddfacet:v0.16.10` |
-| [`killms-memory-plan`](#cab-killms-memory-plan) | memory plan | Suggest killMS NCPU, chunk size and solution interval from a memory budget. | `ghcr.io/tmolteno/killms:v3.15.12` |
-| [`pick-reference-ant`](#cab-pick-reference-ant) | python-code | Pick the reference antenna from flag fraction and distance to the array centre. | `ghcr.io/tmolteno/ddfacet:v0.16.10` |
+| [`bdsf.catalog`](#cab-bdsf-catalog) | image override | Image-only override that runs cult-cargo's PyBDSF catalogue step in the multi-arch DDFacet image. | `ghcr.io/tmolteno/ddfacet:v0.16.11` |
+| [`ddfacet`](#cab-ddfacet) | container | Direction-dependent imager, gridder and deconvolver (`DDF.py`). | `ghcr.io/tmolteno/ddfacet:v0.16.11` |
+| [`killms`](#cab-killms) | container | Direction-dependent gain solver (`kMS.py`). | `ghcr.io/tmolteno/killms:v3.15.13` |
+| [`ddf_makemodel`](#cab-ddf-makemodel) | container | Build a direction-clustering catalogue from a DS9 region (`MakeModel.py`). | `ghcr.io/tmolteno/ddfacet:v0.16.11` |
+| [`ddf_makemask`](#cab-ddf-makemask) | container | Make a FITS clean mask from a restored image (`MakeMask.py`). | `ghcr.io/tmolteno/ddfacet:v0.16.11` |
+| [`dilatemask`](#cab-dilatemask) | python-code | Dilate an external clean mask by N synthesised beams. | `ghcr.io/tmolteno/ddfacet:v0.16.11` |
+| [`clustercat`](#cab-clustercat) | container | Cluster a source catalogue into DD direction nodes (`ClusterCat.py`). | `ghcr.io/tmolteno/ddfacet:v0.16.11` |
+| [`ddfacet-get-npix`](#cab-ddfacet-get-npix) | python-code | Compute the padded image size DDFacet needs. | `ghcr.io/tmolteno/ddfacet:v0.16.11` |
+| [`modelcat`](#cab-modelcat) | python-code | Replace BDSF catalogue fluxes with the first-pass model flux. | `ghcr.io/tmolteno/ddfacet:v0.16.11` |
+| [`autofacet`](#cab-autofacet) | python-code | Derive facet centres from the DI image products. | `ghcr.io/tmolteno/ddfacet:v0.16.11` |
+| [`snapnodes`](#cab-snapnodes) | python-code | Move DD direction nodes onto the dominant modelled source in each cell. | `ghcr.io/tmolteno/ddfacet:v0.16.11` |
+| [`ddfacet-memory-plan`](#cab-ddfacet-memory-plan) | memory plan | Suggest DDFacet NCPU, chunk size and channel step from a memory budget. | `ghcr.io/tmolteno/ddfacet:v0.16.11` |
+| [`killms-memory-plan`](#cab-killms-memory-plan) | memory plan | Suggest killMS NCPU, chunk size and solution interval from a memory budget. | `ghcr.io/tmolteno/killms:v3.15.13` |
+| [`pick-reference-ant`](#cab-pick-reference-ant) | python-code | Pick the reference antenna from flag fraction and distance to the array centre. | `ghcr.io/tmolteno/ddfacet:v0.16.11` |
 
 ## Typical wiring
 
@@ -85,7 +85,7 @@ recipe's own step flow controls what runs.
 **Purpose:** Image-only override that runs cult-cargo's PyBDSF catalogue step in the multi-arch DDFacet image.
 
 **Kind:** image override  
-**Image:** `ghcr.io/tmolteno/ddfacet:v0.16.10`  
+**Image:** `ghcr.io/tmolteno/ddfacet:v0.16.11`  
 
 ### Notes
 
@@ -125,7 +125,7 @@ This cab defines no outputs.
 **Purpose:** Direction-dependent imager, gridder and deconvolver (`DDF.py`).
 
 **Kind:** container  
-**Image:** `ghcr.io/tmolteno/ddfacet:v0.16.10`  
+**Image:** `ghcr.io/tmolteno/ddfacet:v0.16.11`  
 **Command:** `DDF.py`  
 
 ### Notes
@@ -787,7 +787,7 @@ ddfacet-target:
 **Purpose:** Direction-dependent gain solver (`kMS.py`).
 
 **Kind:** container  
-**Image:** `ghcr.io/tmolteno/killms:v3.15.12`  
+**Image:** `ghcr.io/tmolteno/killms:v3.15.13`  
 **Command:** `kMS.py`  
 
 ### Notes
@@ -985,7 +985,7 @@ killms-target:
 **Purpose:** Build a direction-clustering catalogue from a DS9 region (`MakeModel.py`).
 
 **Kind:** container  
-**Image:** `ghcr.io/tmolteno/ddfacet:v0.16.10`  
+**Image:** `ghcr.io/tmolteno/ddfacet:v0.16.11`  
 **Command:** `MakeModel.py`  
 
 ### Notes
@@ -1033,7 +1033,7 @@ make-model:
 **Purpose:** Make a FITS clean mask from a restored image (`MakeMask.py`).
 
 **Kind:** container  
-**Image:** `ghcr.io/tmolteno/ddfacet:v0.16.10`  
+**Image:** `ghcr.io/tmolteno/ddfacet:v0.16.11`  
 **Command:** `MakeMask.py`  
 
 ### Notes
@@ -1078,7 +1078,7 @@ make-mask:
 **Purpose:** Dilate an external clean mask by N synthesised beams.
 
 **Kind:** python-code  
-**Image:** `ghcr.io/tmolteno/ddfacet:v0.16.10`  
+**Image:** `ghcr.io/tmolteno/ddfacet:v0.16.11`  
 **Command:** inline Python  
 
 ### Description
@@ -1126,7 +1126,7 @@ around bright sources; it does not change the deconvolution threshold.
 **Purpose:** Cluster a source catalogue into DD direction nodes (`ClusterCat.py`).
 
 **Kind:** container  
-**Image:** `ghcr.io/tmolteno/ddfacet:v0.16.10`  
+**Image:** `ghcr.io/tmolteno/ddfacet:v0.16.11`  
 **Command:** `ClusterCat.py`  
 
 ### Notes
@@ -1180,7 +1180,7 @@ cluster:
 **Purpose:** Compute the padded image size DDFacet needs.
 
 **Kind:** python-code  
-**Image:** `ghcr.io/tmolteno/ddfacet:v0.16.10`  
+**Image:** `ghcr.io/tmolteno/ddfacet:v0.16.11`  
 **Command:** inline Python  
 
 ### Description
@@ -1232,7 +1232,7 @@ ddfacet-target:
 **Purpose:** Replace BDSF catalogue fluxes with the first-pass model flux.
 
 **Kind:** python-code  
-**Image:** `ghcr.io/tmolteno/ddfacet:v0.16.10`  
+**Image:** `ghcr.io/tmolteno/ddfacet:v0.16.11`  
 **Command:** inline Python  
 
 ### Description
@@ -1297,7 +1297,7 @@ flux 0 and are dropped by `clustercat`'s `FluxMin`.  See DDFacet#33.
 **Purpose:** Derive facet centres from the DI image products.
 
 **Kind:** python-code  
-**Image:** `ghcr.io/tmolteno/ddfacet:v0.16.10`  
+**Image:** `ghcr.io/tmolteno/ddfacet:v0.16.11`  
 **Command:** inline Python  
 
 ### Description
@@ -1357,7 +1357,7 @@ working directory into the container.
 **Purpose:** Move DD direction nodes onto the dominant modelled source in each cell.
 
 **Kind:** python-code  
-**Image:** `ghcr.io/tmolteno/ddfacet:v0.16.10`  
+**Image:** `ghcr.io/tmolteno/ddfacet:v0.16.11`  
 **Command:** inline Python  
 
 ### Description
@@ -1437,7 +1437,7 @@ is never edited in place: the original is kept as
 **Purpose:** Suggest DDFacet NCPU, chunk size and channel step from a memory budget.
 
 **Kind:** memory plan  
-**Image:** `ghcr.io/tmolteno/ddfacet:v0.16.10`  
+**Image:** `ghcr.io/tmolteno/ddfacet:v0.16.11`  
 **Command:** inline Python  
 
 ### Description
@@ -1537,7 +1537,7 @@ ddfacet-target:
 **Purpose:** Suggest killMS NCPU, chunk size and solution interval from a memory budget.
 
 **Kind:** memory plan  
-**Image:** `ghcr.io/tmolteno/killms:v3.15.12`  
+**Image:** `ghcr.io/tmolteno/killms:v3.15.13`  
 **Command:** inline Python  
 
 ### Description
@@ -1625,7 +1625,7 @@ killms-target:
 **Purpose:** Pick the reference antenna from flag fraction and distance to the array centre.
 
 **Kind:** python-code  
-**Image:** `ghcr.io/tmolteno/ddfacet:v0.16.10`  
+**Image:** `ghcr.io/tmolteno/ddfacet:v0.16.11`  
 **Command:** inline Python  
 
 ### Description

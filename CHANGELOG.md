@@ -10,6 +10,46 @@ DDFacet's `CHANGES.md` and commit history, killMS's commit history, and
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-11-03
+
+### Container images
+
+- DDFacet `ghcr.io/tmolteno/ddfacet:v0.16.10` → `v0.16.11`.
+- killMS `ghcr.io/tmolteno/killms:v3.15.12` → `v3.15.13`.
+- Image pins are those of the cabs synced from meerkat_imaging, equal to the latest upstream tags.
+
+### DDFacet
+
+#### `v0.16.11` (2026-11-03)
+- Fix the CF cache load under numpy 2: the getattr fallback was evaluated eagerly (#118) (`16755f92`)
+- MSMF: a stuck pixel is left out of the minor cycle instead of ending the deconvolution (#120) (`c3a43a5f`)
+- MSMF: a peak next to a stuck pixel gets a normal attempt instead of tripping the divergence guard (#120) (`fdec167a`)
+- MSMF: in HMP weighted mode the divergence guard compares weighted peaks (`ef7a6b02`)
+- HMP: natural-cubic-spline spectral basis, --HMP-SpectralBasis nspline (#122) (`e92fe17b`)
+- HMP nspline: measure a solution's flux as its band-weighted mean, not its value at nu0 (#122) (`992b6f6d`)
+- CHANGES: #122 solve uses the band-weighted flux measure (799bdf4a) (`910e5075`)
+- HMP nspline: --HMP-SplineKnots weighted places each knot at the channel-weighted mean of ln(nu) (#122) (`644fa897`)
+- HMP nspline: HMP.SplinePenalty defaults to 1 (#122) (`fdb18260`)
+- HMP nspline: band_centre_knots rejects non-positive frequencies before the log (#122) (`22d9ab9b`)
+- CHANGES: v0.16.11 records the #118 CF cache fix (`f0b71931`)
+
+### killMS
+
+#### `v3.15.13` (2026-11-03)
+- Rebuilt on DDFacet `v0.16.11`; no source changes.
+
+### Cab changes (meerkat_imaging)
+
+meerkat_imaging `31f3f78` → `ef10081`:
+
+- Image pin updates only.
+
+### Packaging
+
+- Package version bumped from `0.3.0` to `0.3.1`.
+- Cabs and schemas synced from `meerkat_imaging/cabs` (`invoke sync`).
+- Changelog generated from the `../DDFacet` and `../killMS` commit history and meerkat_imaging's cab history.
+
 ## [0.3.0] - 2026-10-24
 
 ### Container images
@@ -343,7 +383,8 @@ meerkat_imaging `529047a` → `76ccf43`:
   plus the `ddfacet-memory-plan` and `killms-memory-plan` cabs.
 - PyPI trusted publishing (OIDC) on `vX.Y.Z` tags.
 
-[Unreleased]: https://github.com/tmolteno/dde-cargo/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/tmolteno/dde-cargo/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/tmolteno/dde-cargo/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/tmolteno/dde-cargo/compare/v0.2.3...v0.3.0
 [0.2.3]: https://github.com/tmolteno/dde-cargo/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/tmolteno/dde-cargo/compare/v0.2.1...v0.2.2
