@@ -10,6 +10,40 @@ DDFacet's `CHANGES.md` and commit history, killMS's commit history, and
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-11-03
+
+### Container images
+
+- DDFacet `ghcr.io/tmolteno/ddfacet:v0.16.11` → `v0.16.12`.
+- killMS `ghcr.io/tmolteno/killms:v3.15.13` → `v3.15.14`.
+- Image pins are those of the cabs synced from meerkat_imaging, equal to the latest upstream tags.
+
+### DDFacet
+
+#### `v0.16.12` (2026-11-03)
+- HMP: HMP.FluxMeasure apparent -- take a component's sign and flux from the apparent mean, not the beam-weighted intrinsic mean (`f01969f1`)
+- MSMF: HMP.DivergenceAction quarantine -- on a divergence-guard trip, mask the trip site for the rest of the minor cycle instead of ending the deconvolution (`ac3ca5c1`)
+- CHANGES: HMP.FluxMeasure apparent and HMP.DivergenceAction quarantine (meerkat_imaging#16) (`7be68868`)
+- MSMF/HMP: no divide-by-zero raise when the peak or the beam is zero (meerkat_imaging#16) (`c422da21`)
+- Test: TestHMPFluxMeasure freezes the alpha-PI "main" case per architecture (arm64 gate) (`a05e1428`)
+
+### killMS
+
+#### `v3.15.14` (2026-11-03)
+- Rebuilt on DDFacet `v0.16.12`; no source changes.
+
+### Cab changes (meerkat_imaging)
+
+meerkat_imaging `ef10081` → `9aa0506`:
+
+- Image pin updates only.
+
+### Packaging
+
+- Package version bumped from `0.3.1` to `0.3.2`.
+- Cabs and schemas synced from `meerkat_imaging/cabs` (`invoke sync`).
+- Changelog generated from the `../DDFacet` and `../killMS` commit history and meerkat_imaging's cab history.
+
 ## [0.3.1] - 2026-11-03
 
 ### Container images
@@ -383,7 +417,8 @@ meerkat_imaging `529047a` → `76ccf43`:
   plus the `ddfacet-memory-plan` and `killms-memory-plan` cabs.
 - PyPI trusted publishing (OIDC) on `vX.Y.Z` tags.
 
-[Unreleased]: https://github.com/tmolteno/dde-cargo/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/tmolteno/dde-cargo/compare/v0.3.2...HEAD
+[0.3.2]: https://github.com/tmolteno/dde-cargo/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/tmolteno/dde-cargo/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/tmolteno/dde-cargo/compare/v0.2.3...v0.3.0
 [0.2.3]: https://github.com/tmolteno/dde-cargo/compare/v0.2.2...v0.2.3
