@@ -511,7 +511,7 @@ solutions applied.  `ddfacet-memory-plan` can choose `Parallel.NCPU`,
 </details>
 
 <details>
-<summary><code>HMP</code> (13 parameters)</summary>
+<summary><code>HMP</code> (21 parameters)</summary>
 
 *HMP deconvolution options.*
 
@@ -530,6 +530,14 @@ solutions applied.  `ddfacet-memory-plan` can choose `Parallel.NCPU`,
 | `HMP.Kappa` | `float` | no | — | Regularization parameter. If stddev of per-alpha solutions exceeds the maximum solution amplitude divided by Kappa, forces a fully-regularized solution. Use 0 for no such regularization. (Default: 0.0) |
 | `HMP.OuterSpaceTh` | `str` | no | — | (Default: 2.0) |
 | `HMP.FractionRandomPeak` | `str` | no | — |  |
+| `HMP.DivergenceAction` | `str` | no | — | What to do when a peak exceeds the divergence limit (AllowResidIncrease). "stop" ends the deconvolution. "quarantine" leaves a disc around the peak out of the peak search for the rest of that minor cycle and carries on cleaning. (Default: stop) Choices: `stop`, `quarantine` |
+| `HMP.QuarantineRadius` | `float` | no | — | Radius of a quarantined disc, in PSF FWHM (40 px if there is no PSF). (Default: 10) |
+| `HMP.MaxQuarantine` | `int` | no | — | With DivergenceAction=quarantine: end the minor cycle (not the deconvolution) after more than this many quarantines, or at once if a peak exceeds twice the divergence limit. (Default: 50) |
+| `HMP.SpectralBasis` | `str` | no | — | Spectral basis functions of the HMP model: alpha = power laws (nu/nu0)^alpha on the HMP.Alpha grid; nspline = natural cubic splines in ln(nu), one knot per imaging band (Freq-NBand) at the band centres, times (nu/nu0)^SplineRefAlpha (DDFacet#122). Needs Freq-NBand >= 2. (Default: alpha) |
+| `HMP.SplineKnots` | `str` | no | — | nspline basis: where each band's knot goes in ln(nu): centre = the unweighted mean over the band's channels; weighted = the mean weighted by each channel's effective weight (imaging weights x flags x beam, summed over facets), i.e. where the band image is actually centred (DDFacet#122). (Default: centre) Choices: `centre`, `weighted` |
+| `HMP.SplineRefAlpha` | `float` | no | — | nspline basis: the fixed reference spectral index a0 the splines are multiplied by, (nu/nu0)^a0 (Default: -0.7) |
+| `HMP.SplinePenalty` | `float` | no | — | nspline basis: smoothness penalty lambda, lambda*P^T P added to the HMP normal matrix, P = second divided differences of the knot coefficients in ln(nu) within each spatial scale, scaled by the squared mean knot spacing (null space: power-law-like spectra (nu/nu0)^a0 (a+b*ln(nu/nu0))). lambda is relative to trace(BM^T W BM)/nFunc; 0 = interpolating spline; the default 1 is what real-data tests support (Default: 1.0) |
+| `HMP.FluxMeasure` | `str` | no | — | How HMP sets a component's sign and size: intrinsic = from the beam-corrected (intrinsic) band-weighted mean at the peak; apparent = from the apparent band-weighted mean at the peak, the quantity the minor-cycle peak search and divergence guard use (PI and NNLS, Python path only; the Rust NNLS fast path is bypassed) (Default: intrinsic) |
 
 </details>
 

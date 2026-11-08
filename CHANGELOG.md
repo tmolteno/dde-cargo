@@ -10,6 +10,34 @@ DDFacet's `CHANGES.md` and commit history, killMS's commit history, and
 
 ## [Unreleased]
 
+## [0.3.4] - 2026-11-09
+
+### Container images
+
+- DDFacet `ghcr.io/tmolteno/ddfacet:v0.16.12` → `v0.16.12`.
+- killMS `ghcr.io/tmolteno/killms:v3.15.14` → `v3.15.14`.
+- Image pins are those of the cabs synced from meerkat_imaging, equal to the latest upstream tags.
+
+### DDFacet
+
+- Unchanged at `v0.16.12`.
+
+### killMS
+
+- Unchanged at `v3.15.14`.
+
+### Cab changes (meerkat_imaging)
+
+meerkat_imaging `300b8b2` → `43c2c82`:
+
+- pipeline: the final DD cleans (corrected-ddfacet, corrected-ddfacet-2) set HMP.FluxMeasure apparent and HMP.DivergenceAction quarantine, as every #17/#20 measurement of them was made (meerkat_imaging#16 E3+4b); cabs/ddfacet_stimela_inputs_schema.yml gains DDFacet v0.16.12's HMP keys (needs a dde-cargo release: 0.3.3 lacks them).  finalize-deconvolution stays at one major cycle: run to convergence (#20 B3ycq) it cleans target_1's src0 rings into the model and the DD solve then over-subtracts F2/F3/F4 (`d881319`)
+
+### Packaging
+
+- Package version bumped from `0.3.3` to `0.3.4`.
+- Cabs and schemas synced from `meerkat_imaging/cabs` (`invoke sync`).
+- Changelog generated from the `../DDFacet` and `../killMS` commit history and meerkat_imaging's cab history.
+
 ## [0.3.3] - 2026-11-08
 
 ### Container images
@@ -454,7 +482,8 @@ meerkat_imaging `529047a` → `76ccf43`:
   plus the `ddfacet-memory-plan` and `killms-memory-plan` cabs.
 - PyPI trusted publishing (OIDC) on `vX.Y.Z` tags.
 
-[Unreleased]: https://github.com/tmolteno/dde-cargo/compare/v0.3.3...HEAD
+[Unreleased]: https://github.com/tmolteno/dde-cargo/compare/v0.3.4...HEAD
+[0.3.4]: https://github.com/tmolteno/dde-cargo/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/tmolteno/dde-cargo/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/tmolteno/dde-cargo/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/tmolteno/dde-cargo/compare/v0.3.0...v0.3.1
