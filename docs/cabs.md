@@ -39,7 +39,7 @@ through `kMS.py`.
 |---|---|---|---|
 | [`bdsf.catalog`](#cab-bdsf-catalog) | image override | Image-only override that runs cult-cargo's PyBDSF catalogue step in the multi-arch DDFacet image. | `ghcr.io/tmolteno/ddfacet:v0.16.12` |
 | [`ddfacet`](#cab-ddfacet) | container | Direction-dependent imager, gridder and deconvolver (`DDF.py`). | `ghcr.io/tmolteno/ddfacet:v0.16.12` |
-| [`killms`](#cab-killms) | container | Direction-dependent gain solver (`kMS.py`). | `ghcr.io/tmolteno/killms:v3.15.14` |
+| [`killms`](#cab-killms) | container | Direction-dependent gain solver (`kMS.py`). | `ghcr.io/tmolteno/killms:v3.15.15` |
 | [`ddf_makemodel`](#cab-ddf-makemodel) | container | Build a direction-clustering catalogue from a DS9 region (`MakeModel.py`). | `ghcr.io/tmolteno/ddfacet:v0.16.12` |
 | [`ddf_makemask`](#cab-ddf-makemask) | container | Make a FITS clean mask from a restored image (`MakeMask.py`). | `ghcr.io/tmolteno/ddfacet:v0.16.12` |
 | [`dilatemask`](#cab-dilatemask) | python-code | Dilate an external clean mask by N synthesised beams. | `ghcr.io/tmolteno/ddfacet:v0.16.12` |
@@ -49,7 +49,7 @@ through `kMS.py`.
 | [`autofacet`](#cab-autofacet) | python-code | Derive facet centres from the DI image products. | `ghcr.io/tmolteno/ddfacet:v0.16.12` |
 | [`snapnodes`](#cab-snapnodes) | python-code | Move DD direction nodes onto the dominant modelled source in each cell. | `ghcr.io/tmolteno/ddfacet:v0.16.12` |
 | [`ddfacet-memory-plan`](#cab-ddfacet-memory-plan) | memory plan | Suggest DDFacet NCPU, chunk size and channel step from a memory budget. | `ghcr.io/tmolteno/ddfacet:v0.16.12` |
-| [`killms-memory-plan`](#cab-killms-memory-plan) | memory plan | Suggest killMS NCPU, chunk size and solution interval from a memory budget. | `ghcr.io/tmolteno/killms:v3.15.14` |
+| [`killms-memory-plan`](#cab-killms-memory-plan) | memory plan | Suggest killMS NCPU, chunk size and solution interval from a memory budget. | `ghcr.io/tmolteno/killms:v3.15.15` |
 | [`pick-reference-ant`](#cab-pick-reference-ant) | python-code | Pick the reference antenna from flag fraction and distance to the array centre. | `ghcr.io/tmolteno/ddfacet:v0.16.12` |
 
 ## Typical wiring
@@ -795,7 +795,7 @@ ddfacet-target:
 **Purpose:** Direction-dependent gain solver (`kMS.py`).
 
 **Kind:** container  
-**Image:** `ghcr.io/tmolteno/killms:v3.15.14`  
+**Image:** `ghcr.io/tmolteno/killms:v3.15.15`  
 **Command:** `kMS.py`  
 
 ### Notes
@@ -1545,7 +1545,7 @@ ddfacet-target:
 **Purpose:** Suggest killMS NCPU, chunk size and solution interval from a memory budget.
 
 **Kind:** memory plan  
-**Image:** `ghcr.io/tmolteno/killms:v3.15.14`  
+**Image:** `ghcr.io/tmolteno/killms:v3.15.15`  
 **Command:** inline Python  
 
 ### Description

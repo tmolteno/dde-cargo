@@ -323,7 +323,7 @@ cabs:
             # v3.13.0 (2026-10-02): --BeamModel LOFAR is EveryBeam, the same code DDFacet images with
             # (killMS#36; was a ModuleNotFoundError on the retired lofar module); rebuilt on ddfacet v0.15.2.
             # The FITS beam (MeerKAT) path is unchanged.
-            version: v3.15.14
+            version: v3.15.15
         command: kMS.py
         policies:
             # pass True options as ..option 1
