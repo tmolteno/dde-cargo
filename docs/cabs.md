@@ -1551,7 +1551,8 @@ ddfacet-target:
 ### Description
 
 Plan a killMS solve: NCPU, and whether the calibrated peak-memory model (memplan-model.json), evaluated on the
-MS's total rows and channels and on the sky model's facet grids (DicoFacet), fits the budget.  TChunk and NChanSols pass through.
+rows of one --TChunk chunk and channels and on the sky model's facet grids (DicoFacet), fits the budget, shortening
+TChunk (to /2, /4) when it does not fit at TChunkWant.  NChanSols passes through.
 
 ### Notes
 
@@ -1575,7 +1576,7 @@ branch on it.
 ### Inputs
 
 <details>
-<summary><code>Inputs</code> (12 parameters)</summary>
+<summary><code>Inputs</code> (13 parameters)</summary>
 
 | Parameter | Type | Required | Default | Description |
 |---|---|---|---|---|
@@ -1588,7 +1589,8 @@ branch on it.
 | `WantNCPU` | `int` | no | — | worker count you would like; also the cap.  Default: the usable cores (the CPU affinity set) |
 | `Margin` | `float` | no | `1.25` | safety factor on the predicted peak before it is compared with RamGB |
 | `FailOnNoFit` | `bool` | no | `True` | fail the step (exit 1) when the plan does not fit; false = report Fits false and carry on |
-| `TChunkWant` | `float` | no | `0.5` | --TChunk (hours), passed through as the TChunk output; memory is flat in it |
+| `TChunkWant` | `float` | no | `0.5` | --TChunk (hours) wanted; the TChunk output is this, or TChunkWant/2 or /4 when the solve only fits with a shorter chunk (killMS >= v3.15.15: the solve holds one chunk of the MS) |
+| `dtMin` | `float` | no | `5.0` | the solve's --dt (minutes); TChunk is never shortened below it |
 | `NChanSolsWant` | `int` | no | `20` | --NChanSols, passed through as the NChanSols output.  It sets NDegridBand of the predict, so it IS a memory knob (the facet-grid term scales with it, research section 9); the plan evaluates the model at this value |
 | `PlanOut` | `File` | no | `killms-memory-plan.json` | where to write the plan, as JSON |
 

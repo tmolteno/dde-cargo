@@ -10,9 +10,12 @@
 # from the forked pool.  THIS file is now the planner; the old "copied verbatim from the package" text is gone.
 #
 # THE MODEL
-#   peak = a + c1 * rows_total * nchan * 8e-9 + c2 * NDegridBand * sum_pad2_flux * 8e-9 + c3 * [SSD] * NPix^2 * 1e-9
+#   peak = a + c1 * rows_chunk * nchan * 8e-9 + c2 * NDegridBand * sum_pad2_flux * 8e-9 + c3 * [SSD] * NPix^2 * 1e-9
 #   (max RSS of the kMS.py process, GB; coefficients in memplan-model.json, written by `tools/memplan-fit.py ... --write-model`).
-#   - rows_total, nchan: the WHOLE MS (read from the MS tables); TChunk does not matter.
+#   - rows_chunk, nchan: the rows of the largest --TChunk chunk (killMS >= v3.15.15 holds one chunk; before killMS#46 it held
+#     per-chunk index arrays worth ~4x the chunk and a whole-MS weight array, and the model charged the whole MS).  So TChunk IS
+#     a memory knob: when the solve does not fit at TChunkWant the plan tries TChunkWant/2 and /4 (not below 0.1 h, nor below the
+#     solution interval dtMin) and returns the largest TChunk that fits.  A pre-#46 model (X1, whole MS) is still evaluated as such.
 #   - The second term is the sky model's facet grids.  The predict cuts the model image into one complex64 grid per facet and
 #     degrid band and keeps them for the whole solve (killMS/Predict/ClassImageSM2.py -> DDFacet ClassFacetMachine.set_model_grid),
 #     but only for facets that hold model flux (killMS#30).  NDegridBand is NChanSols (kMS.py sets Freq.NDegridBand from it, so
@@ -24,7 +27,7 @@
 #     large NPix.  Without a DicoModel every facet counts (a few % to tens of % high).
 #   - NChanSols is therefore a memory knob (about 0.5 GB per band at NPix 4459), no longer a pass-through of no consequence;
 #     this cab still passes NChanSolsWant through unchanged and returns every usable core as NCPU.
-#   Measured flat in TChunk (0.25 / 0.5 / 1.0 h), NDir (4 / 10 / 20) and NCPU (4 / 12 / 20); NOT flat in NChanSols (section 9).
+#   Measured flat in NDir (4 / 10 / 20) and NCPU (4 / 12 / 20); NOT flat in NChanSols (section 9) nor, since killMS#46, in TChunk.
 #   - The SSD term: an SSD DicoModel is a dense image (nterms x NPix x NPix), expanded by the predict, so it costs ~NPix^2 (+2 GB at
 #     NPix 1225, +30 GB at 5265).  Calibrated on ONE large SSD solve (research file, section 9).  SSDModel (the base DicoModel holds
 #     SSD components) is an input, not derived from the DicoModel's type; NPix is estimated from the DicoFacet.
@@ -69,7 +72,8 @@ cabs:
     killms-memory-plan:
         info: |
             Plan a killMS solve: NCPU, and whether the calibrated peak-memory model (memplan-model.json), evaluated on the
-            MS's total rows and channels and on the sky model's facet grids (DicoFacet), fits the budget.  TChunk and NChanSols pass through.
+            rows of one --TChunk chunk and channels and on the sky model's facet grids (DicoFacet), fits the budget, shortening
+            TChunk (to /2, /4) when it does not fit at TChunkWant.  NChanSols passes through.
         image:
             _use: vars.killms-memory-plan.image
         inputs:
@@ -119,7 +123,13 @@ cabs:
             TChunkWant:
                 dtype: float
                 default: 0.5
-                info: --TChunk (hours), passed through as the TChunk output; memory is flat in it
+                info: >
+                    --TChunk (hours) wanted; the TChunk output is this, or TChunkWant/2 or /4 when the solve only fits with a
+                    shorter chunk (killMS >= v3.15.15: the solve holds one chunk of the MS)
+            dtMin:
+                dtype: float
+                default: 5.0
+                info: the solve's --dt (minutes); TChunk is never shortened below it
             NChanSolsWant:
                 dtype: int
                 default: 20
@@ -141,8 +151,8 @@ cabs:
             TChunk:
                 dtype: float
                 info: >
-                    pass to --TChunk (hours): TChunkWant, unchanged.  An *output*, so a recipe can wire it; it must
-                    not also be an input -- stimela rejects a name that appears in both (killMS#8)
+                    pass to --TChunk (hours): TChunkWant, or the largest of TChunkWant/2, /4 that fits.  An *output*, so a recipe
+                    can wire it; it must not also be an input -- stimela rejects a name that appears in both (killMS#8)
             NChanSols:
                 dtype: int
                 info: pass to --NChanSols (NChanSolsWant, unchanged)
@@ -459,15 +469,24 @@ cabs:
                 return out
 
 
-            def kms_peak(model, rows_total, nchan, ssd=False, ndegrid=None, pad2_nz=None, npix=None):
-                """Predicted max RSS of kMS.py, GB (1e9 B); flat in TChunk, NDir and NCPU (phase 1).
-                X1: the whole MS (rows_total * nchan).  X2n: the sky model's facet grids: the predict cuts the model image into one complex64
-                grid per facet and degrid band and keeps them for the solve, but only for facets with model flux.  ndegrid = NChanSols
-                (kMS.py sets Freq.NDegridBand from it); pad2_nz = dico_facet_stats(...)["pad2_nz"], the sum of NpixFacetPadded^2 over the facets
-                with flux.  pad2_nz None omits X2n (the plan then under-predicts at large NPix; the caller says so).
+            def kms_peak(model, rows_total, nchan, ssd=False, ndegrid=None, pad2_nz=None, npix=None, rows_chunk=None):
+                """Predicted max RSS of kMS.py, GB (1e9 B); flat in NDir and NCPU (phase 1).
+                X1c (killMS >= v3.15.15, killMS#46): the rows of the largest --TChunk chunk (chunk_rows(times, TChunk)) * nchan -- the
+                solve holds one chunk's data, flags, weights and two predict buffers, and nothing rows x channels for the whole MS.
+                X1 (legacy, models fitted before killMS#46): the WHOLE MS (rows_total * nchan); used only when the model has no X1c.
+                X2n: the sky model's facet grids: the predict cuts the model image into one complex64 grid per facet and degrid band and
+                keeps them for the solve, but only for facets with model flux.  ndegrid = NChanSols (kMS.py sets Freq.NDegridBand from it);
+                pad2_nz = dico_facet_stats(...)["pad2_nz"], the sum of NpixFacetPadded^2 over the facets with flux.  pad2_nz None omits X2n
+                (the plan then under-predicts at large NPix; the caller says so).
                 XS: an SSD DicoModel is a dense image (nterms x NPix x NPix) that the predict expands: [SSD] * NPix^2 * 1e-9 (npix None omits it)."""
                 c = model["kms"]["coefficients"]
-                terms = {"a": c["a"], "X1": c["X1"] * rows_total * nchan * 8e-9}
+                terms = {"a": c["a"]}
+                if "X1c" in c:
+                    if rows_chunk is None:
+                        raise ValueError("kms_peak: this model's row term is per TChunk chunk (X1c): pass rows_chunk")
+                    terms["X1c"] = c["X1c"] * rows_chunk * nchan * 8e-9
+                else:
+                    terms["X1"] = c["X1"] * rows_total * nchan * 8e-9
                 if "X2n" in c and pad2_nz is not None and ndegrid is not None:
                     terms["X2n"] = c["X2n"] * ndegrid * pad2_nz * 8e-9
                 if ssd:
@@ -501,9 +520,10 @@ cabs:
                 chunk is used).  Memory is flat in NCPU (phase 1), so NCPU is not part of the search.
                 Returns (best or None, every combination tried, {step: (nfacets, sum pad^2)}); an entry is dict(chunk_hours,
                 chan_step, nchan, rows_chunk, peak_gb, planned_gb, fits, limit_step, by_step).
-                kms: None, or dict(ndegrid=NChanSols[, rows_total, nchan]) to also require the killMS solve to fit.  The solve is a separate process
-                that runs after the finalize clean, flat in ChunkHours / ChanStep (it reads the whole MS and every channel), so it is one more entry
-                of by_step ("kms") and, when it is the largest, the limit_step.  The facet term uses the sum of pad^2 over ALL facets of the finalize
+                kms: None, or dict(ndegrid=NChanSols[, tchunk=--TChunk hours (default 0.5), rows_chunk, rows_total, nchan]) to also require the
+                killMS solve to fit.  The solve is a separate process that runs after the finalize clean, flat in DDFacet's ChunkHours / ChanStep
+                (it reads its own --TChunk chunks of every channel), so it is one more entry of by_step ("kms") and, when it is the largest,
+                the limit_step.  The facet term uses the sum of pad^2 over ALL facets of the finalize
                 tessellation (CatCentres None, as the plan sees it at the solve): an upper bound of the flux-bearing facets the cab's own plan counts."""
                 import copy
                 steps = CLUSTERED if step == "clustered" else (step,)
@@ -521,7 +541,8 @@ cabs:
                     gk = geoms["finalize"] if "finalize" in geoms else max(geoms.values(), key=lambda g: g[1])
                     kms_gb = kms_peak(model, kms.get("rows_total", ms["nrows"]), kms.get("nchan", ms["nchan"]),
                                       ssd=str(base["mode"]).upper().startswith("SSD"), ndegrid=int(kms["ndegrid"]), pad2_nz=gk[1],
-                                      npix=GD["Image"]["NPix"])[0]
+                                      npix=GD["Image"]["NPix"],
+                                      rows_chunk=kms.get("rows_chunk", chunk_rows(ms["times"], float(kms.get("tchunk", 0.5)))))[0]
                 feasible, allp = [], []
                 for cs in chan_steps:
                     nch = nchan_selected(ms["nchan"], sel.get("ChanStart"), sel.get("ChanEnd"), cs)
@@ -552,7 +573,7 @@ cabs:
             _MODEL_JSON = r'''{
               "schema": 2,
               "ddf_form": "D",
-              "source_note": "DDF refit 2026-10-22 (kms-refit): spark p1 + p2(+2b) + p5 -- p5 adds the corrected step at NPix 3465-5625 with the pipeline's auto-facet centres (research section 11) -- JOINT with the 141 x86 #63 points, whose geometry comes from tools/memplan-x86-geom.tsv because the 2026-10-20 prune deleted their DicoFacets.  kMS block unchanged from 2026-10-21: refit on killms v3.15.12 / ddfacet v0.16.10 (casacure 3.8.35), parity harness, fresh MS, a + X1 + X2n + XS on spark memplan-p5 (24 points); x86 #63 kMS points not used (stale MS state)",
+              "source_note": "kMS: phase 6 (2026-11-09), killms v3.15.15 (killMS#46): 10 frozen-set solves on spark (tools/memplan-runs-p6.tsv) + the NGC 7541 TChunk 0.5/0.25 A/B on sparkB (process-tree RSS); XS held at the phase-5 value (no SSD data)",
               "fitted": "2026-10-22",
               "metric": "maxrss",
               "units": "GB = 1e9 B of peak max RSS of the DDF.py / kMS.py process",
@@ -561,8 +582,8 @@ cabs:
               "data": {
                 "kms_runs": [
                   {
-                    "file": "memplan-p5/runs.tsv",
-                    "sha256": "f28427537465e1d3"
+                    "file": "research/memplan-p6-runs.tsv",
+                    "sha256": "de0aae708a48f5a6"
                   }
                 ],
                 "kms_x86_roots": [],
@@ -591,24 +612,7 @@ cabs:
                   "points_filled": 141
                 }
               },
-              "kms_fitted": "2026-10-21",
-              "kms": {
-                "coefficients": {
-                  "a": 4.07751959718835,
-                  "X1": 20.462754530801483,
-                  "X2n": 0.6973619920208876,
-                  "XS": 734.8050773808027
-                },
-                "features": {
-                  "a": "constant floor (GB)",
-                  "X1": "rows_total (the WHOLE MS, not a TChunk) * nchan, times 8e-9",
-                  "X2n": "NDegridBand (= NChanSols: kMS.py sets Freq.NDegridBand from it) * sum of NpixFacetPadded^2 over the facets that hold model flux (a model component pixel inside the facet's padded square), times 8e-9: the predict's per-facet model grids (complex64, one plane per degrid band; killMS keeps them only for facets with flux)",
-                  "XS": "[sky model is SSD] * NPix^2 * 1e-9: an SSD DicoModel is a dense image (Comp Vals, nterms x NPix x NPix) that the predict expands, so its cost follows the image size (HMP models are sparse pixel lists)"
-                },
-                "npoints": 24,
-                "underdetermined": false,
-                "dropped_terms": []
-              },
+              "kms_fitted": "2026-11-09",
               "ddf": {
                 "coefficients": {
                   "a": 1.65320261261094,
@@ -639,6 +643,26 @@ cabs:
                 "npoints": 217,
                 "underdetermined": false,
                 "dropped_terms": []
+              },
+              "kms": {
+                "coefficients": {
+                  "a": 1.02700069396247,
+                  "X1c": 25.704255521819036,
+                  "X2n": 1.0840982357870708,
+                  "XS": 734.8050773808027
+                },
+                "features": {
+                  "a": "constant floor (GB)",
+                  "X1c": "rows of the largest --TChunk chunk (memplan_lib.chunk_rows(times, TChunk)) * nchan, times 8e-9: one chunk's data, flags, weights and the two predict buffers (killMS >= v3.15.15, killMS#46)",
+                  "X2n": "NDegridBand (= NChanSols: kMS.py sets Freq.NDegridBand from it) * sum of NpixFacetPadded^2 over the facets that hold model flux (a model component pixel inside the facet's padded square), times 8e-9: the predict's per-facet model grids (complex64, one plane per degrid band; killMS keeps them only for facets with flux)",
+                  "XS": "[sky model is SSD] * NPix^2 * 1e-9: an SSD DicoModel is a dense image (Comp Vals, nterms x NPix x NPix) that the predict expands, so its cost follows the image size (HMP models are sparse pixel lists)"
+                },
+                "npoints": 12,
+                "underdetermined": false,
+                "fixed_terms": {
+                  "XS": 734.8050773808027
+                },
+                "dropped_terms": []
               }
             }
             '''
@@ -666,18 +690,29 @@ cabs:
             else:
                 warnings.append("no DicoFacet: the facet-grid term is left out and the prediction is LOW at large NPix")
             ndegrid = int(NChanSolsWant)
-            PeakGB, terms = L.kms_peak(model, ms["nrows"], ms["nchan"], ssd=ssd, ndegrid=ndegrid,
-                                       pad2_nz=geom["pad2_nz"] if geom else None,
-                                       npix=geom["npix_est"] if geom else None)
-            PlannedGB = PeakGB * margin
-            Fits = bool(PlannedGB <= ram_gb)
+            _want = float(TChunkWant)
+            _floor = max(0.1, float(_opt("dtMin", 5.0)) / 60.0)
+            _cands = [_want] + [t for t in (_want / 2, _want / 4) if t >= _floor - 1e-9]
+            tried = []
+            for TChunk in _cands:
+                rows_chunk = L.chunk_rows(ms["times"], TChunk)
+                PeakGB, terms = L.kms_peak(model, ms["nrows"], ms["nchan"], ssd=ssd, ndegrid=ndegrid,
+                                           pad2_nz=geom["pad2_nz"] if geom else None,
+                                           npix=geom["npix_est"] if geom else None, rows_chunk=rows_chunk)
+                PlannedGB = PeakGB * margin
+                Fits = bool(PlannedGB <= ram_gb)
+                tried.append(dict(tchunk=TChunk, rows_chunk=rows_chunk, peak_gb=round(PeakGB, 3), fits=Fits))
+                if Fits or "X1c" not in model["kms"]["coefficients"]:
+                    break       # a pre-killMS#46 (whole-MS) model does not depend on TChunk
+            if TChunk != _want:
+                print("TChunk %g h does not fit; %g h does" % (_want, TChunk) if Fits else
+                      "no TChunk down to %g h fits" % TChunk)
             NCPU = cores
-            TChunk = float(TChunkWant)
             NChanSols = int(NChanSolsWant)
             RamGBUsed = ram_gb
             Flags = "--NCPU %d --TChunk %g --NChanSols %d" % (NCPU, TChunk, NChanSols)
-            print("MS %s: %d rows (field %d), %d chan, %d antennas, %s sky model"
-                  % (os.path.basename(MS.rstrip("/")), ms["nrows"], int(FieldID), ms["nchan"], ms["nant"],
+            print("MS %s: %d rows (field %d; %d in the largest %g h chunk), %d chan, %d antennas, %s sky model"
+                  % (os.path.basename(MS.rstrip("/")), ms["nrows"], int(FieldID), rows_chunk, TChunk, ms["nchan"], ms["nant"],
                      "SSD" if ssd else "HMP"))
             if geom:
                 print("model facets: %d (%d with flux), sum padded px^2 %.4g (%.4g with flux), %d degrid bands"
@@ -692,7 +727,8 @@ cabs:
             with open(Plan, "w") as _fh:
                 json.dump(dict(fits=Fits, ncpu=NCPU, tchunk=TChunk, nchansols=NChanSols, peak_gb=PeakGB,
                                planned_gb=PlannedGB, margin=margin, ram_gb=ram_gb, ram_source=ram_source,
-                               ssd_model=ssd, rows_total=ms["nrows"], nchan=ms["nchan"], terms=terms, ndegrid=ndegrid,
+                               ssd_model=ssd, rows_total=ms["nrows"], rows_chunk=rows_chunk, tchunk_want=_want,
+                               tchunk_tried=tried, nchan=ms["nchan"], terms=terms, ndegrid=ndegrid,
                                facets=geom, warnings=warnings,
                                model_fitted=model.get("fitted"), flags=Flags), _fh, indent=2)
             if not Fits and bool(_opt("FailOnNoFit", True)):
