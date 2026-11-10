@@ -635,7 +635,7 @@ cabs:
             _MODEL_JSON = r'''{
               "schema": 2,
               "ddf_form": "D",
-              "source_note": "kMS: phase 6 (2026-11-09), killms v3.15.15 (killMS#46): 10 frozen-set solves on spark (tools/memplan-runs-p6.tsv) + the NGC 7541 TChunk 0.5/0.25 A/B on sparkB (process-tree RSS); XS held at the phase-5 value (no SSD data)",
+              "source_note": "kMS: phase 6 (2026-11-09), killms v3.15.15 (killMS#46): 10 frozen-set solves on spark (tools/memplan-runs-p6.tsv) + the NGC 7541 TChunk 0.5/0.25 A/B on sparkB (process-tree RSS) + (2026-11-10) the NGC 7541 512-channel pipeline solve on sparkB (NPix 3675, VmHWM); XS held at the phase-5 value (no SSD data)",
               "fitted": "2026-10-22",
               "metric": "maxrss",
               "units": "GB = 1e9 B of peak max RSS of the DDF.py / kMS.py process",
@@ -645,7 +645,7 @@ cabs:
                 "kms_runs": [
                   {
                     "file": "research/memplan-p6-runs.tsv",
-                    "sha256": "de0aae708a48f5a6"
+                    "sha256": "32b37f8749efdcc5"
                   }
                 ],
                 "kms_x86_roots": [],
@@ -674,7 +674,7 @@ cabs:
                   "points_filled": 141
                 }
               },
-              "kms_fitted": "2026-11-09",
+              "kms_fitted": "2026-11-10",
               "ddf": {
                 "coefficients": {
                   "a": 1.65320261261094,
@@ -708,9 +708,9 @@ cabs:
               },
               "kms": {
                 "coefficients": {
-                  "a": 1.02700069396247,
-                  "X1c": 25.704255521819036,
-                  "X2n": 1.0840982357870708,
+                  "a": 1.9931270062093998,
+                  "X1c": 17.711712997853294,
+                  "X2n": 1.179133847245005,
                   "XS": 734.8050773808027
                 },
                 "features": {
@@ -719,7 +719,7 @@ cabs:
                   "X2n": "NDegridBand (= NChanSols: kMS.py sets Freq.NDegridBand from it) * sum of NpixFacetPadded^2 over the facets that hold model flux (a model component pixel inside the facet's padded square), times 8e-9: the predict's per-facet model grids (complex64, one plane per degrid band; killMS keeps them only for facets with flux)",
                   "XS": "[sky model is SSD] * NPix^2 * 1e-9: an SSD DicoModel is a dense image (Comp Vals, nterms x NPix x NPix) that the predict expands, so its cost follows the image size (HMP models are sparse pixel lists)"
                 },
-                "npoints": 12,
+                "npoints": 13,
                 "underdetermined": false,
                 "fixed_terms": {
                   "XS": 734.8050773808027
