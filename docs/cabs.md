@@ -1576,14 +1576,17 @@ branch on it.
 ### Inputs
 
 <details>
-<summary><code>Inputs</code> (13 parameters)</summary>
+<summary><code>Inputs</code> (16 parameters)</summary>
 
 | Parameter | Type | Required | Default | Description |
 |---|---|---|---|---|
 | `MS` | `MS` | yes | — | the MS the solve reads; its tables are read for the total rows and channels |
 | `FieldID` | `int` | no | `0` | the MS field (kMS --FieldID) |
-| `DicoFacet` | `File` | no | — | the DicoFacet of the DDFacet run that made the base model (<Output.Name>.DicoFacet): the facets the solve's predict builds its model grids on.  Without it the facet-grid term is left out and the plan under-predicts at large NPix |
+| `DicoFacet` | `File` | no | — | fallback when BaseImageName / NodesFile are not given: the DicoFacet of the DDFacet run that made the base model. It is DDFacet's tessellation, not the solve's (a warning says so).  With neither, the facet-grid and W-kernel terms are left out and the plan under-predicts at large NPix |
 | `DicoModel` | `File` | no | — | the base DicoModel (default: the DicoFacet's name with .DicoModel).  Read for its component pixels, to count only the facets that hold model flux; if missing every facet is counted |
+| `BaseImageName` | `str` | no | — | the solve's --BaseImageName.  With NodesFile, the plan tessellates as killMS does (<BaseImageName>.parset, CatNodes = NodesFile, CatCentres = FacetCentres) and reads <BaseImageName>.DicoModel; this is the geometry the solve builds.  Without it the plan falls back to DicoFacet |
+| `NodesFile` | `File` | no | — | the solve's --NodesFile (the ClusterCat); declare this step after anything that rewrites it (snap-nodes) |
+| `FacetCentres` | `File` | no | — | the solve's --FacetCentres, when it has one |
 | `SSDModel` | `bool` | no | `False` | the base DicoModel holds SSD (SSD2 / SSD3) components rather than HMP ones |
 | `RamGB` | `float` | no | — | memory the solve may use, GB.  Default: what the host has available when the step runs -- MemAvailable, capped by the cgroup memory limit if there is one |
 | `WantNCPU` | `int` | no | — | worker count you would like; also the cap.  Default: the usable cores (the CPU affinity set) |

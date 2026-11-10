@@ -10,7 +10,7 @@
 # from the forked pool.  THIS file is now the planner; the old "copied verbatim from the package" text is gone.
 #
 # THE MODEL
-#   peak = a + c1 * rows_chunk * nchan * 8e-9 + c2 * NDegridBand * sum_pad2_flux * 8e-9 + c3 * [SSD] * NPix^2 * 1e-9
+#   peak = a + c1 * rows_chunk * nchan * 8e-9 + c2 * NDegridBand * sum_pad2_flux * 8e-9 + c3 * [SSD] * NPix^2 * 1e-9 + c4 * CF_GB
 #   (max RSS of the kMS.py process, GB; coefficients in memplan-model.json, written by `tools/memplan-fit.py ... --write-model`).
 #   - rows_chunk, nchan: the rows of the largest --TChunk chunk (killMS >= v3.15.15 holds one chunk; before killMS#46 it held
 #     per-chunk index arrays worth ~4x the chunk and a whole-MS weight array, and the model charged the whole MS).  So TChunk IS
@@ -20,8 +20,11 @@
 #     degrid band and keeps them for the whole solve (killMS/Predict/ClassImageSM2.py -> DDFacet ClassFacetMachine.set_model_grid),
 #     but only for facets that hold model flux (killMS#30).  NDegridBand is NChanSols (kMS.py sets Freq.NDegridBand from it, so
 #     the DDFacet run's own NDegridBand never reaches the solve), and sum_pad2_flux is the sum of NpixFacetPadded^2 over the facets
-#     whose padded square contains a model component.  Both come from the finalize clean's DicoFacet and DicoModel, which exist when
-#     this step runs.  The first calibration (phases 1-2) had only NPix 1225 / 3375 models and no such term: it under-predicted the
+#     whose padded square contains a model component.  The facets are the ones killMS builds: kMS.py re-tessellates from the base
+#     image's parset with Facets.CatNodes = --NodesFile and Facets.CatCentres = --FacetCentres, so with BaseImageName + NodesFile
+#     (+ FacetCentres) this cab runs that same tessellation (memplan_lib.kms_geometry; DDFacet is in the killms image).  The finalize
+#     clean's DicoFacet is NOT the solve's (NGC 7541 512 chan: 180 facets / 1.147e8 pad^2 with flux there, 152 / 1.50e8 in the
+#     solve -- and killMS overwrites the file); it is only the fallback, with a warning.  The first calibration (phases 1-2) had only NPix 1225 / 3375 models and no such term: it under-predicted the
 #     auto run's NPix 5265 solves by 70-80 % (research/MEMORY_PLAN_CALIBRATION.md section 9).
 #   - Without a DicoFacet the term is omitted and the plan says so (a warning in the JSON and on stdout): it then under-predicts at
 #     large NPix.  Without a DicoModel every facet counts (a few % to tens of % high).
@@ -31,6 +34,12 @@
 #   - The SSD term: an SSD DicoModel is a dense image (nterms x NPix x NPix), expanded by the predict, so it costs ~NPix^2 (+2 GB at
 #     NPix 1225, +30 GB at 5265).  Calibrated on ONE large SSD solve (research file, section 9).  SSDModel (the base DicoModel holds
 #     SSD components) is an input, not derived from the DicoModel's type; NPix is estimated from the DicoFacet.
+#   - CF_GB, the W-term kernels: every facet gets CF-Nw W-planes and their conjugates, plane i a complex64 (Sup_i * OverS)^2, with
+#     Sup_i from CF-Support up to where the kernel of max |w| (killMS: the whole UVW column) at the shortest wavelength, over the
+#     padded facet, falls to 1e-3 (DDFacet ModCF.InitW, memplan_lib.cf_bytes; exact against DDFacet's kernels).  Small at
+#     high declination, ~6 GB for NGC 7541 (dec +4.8 deg, max |w| 5954 m) at NPix 1225.  From the DicoFacet's padded facet sizes
+#     and the MS; Support / Nw / OverS come from the base image's parset [CF] (the DicoFacet fallback assumes DDFacet's defaults
+#     7 / 100 / 11).  Without any facets the term is left out with the facet-grid term.
 #   To refit, regenerate the JSON (memplan-fit.py --write-model also regenerates this cab).  Data, bands: the research file, section 9.
 #
 # SELF-CONTAINED (this cab ships in the dde-cargo package, so it reads no host file): tools/memplan_lib.py and
@@ -45,7 +54,9 @@
 #         params:
 #             MS: =recipe.target-ms
 #             SSDModel: =recipe.ddf-deconv-mode != 'HMP'
-#             DicoFacet: '{steps.finalize-deconvolution.Output.Name}.DicoFacet'   # the facets of the model the solve predicts from
+#             BaseImageName: =steps.finalize-deconvolution.Output.Name   # the same three facet inputs as the solve
+#             NodesFile: =steps.inital-masked-deconvolution.Facets.CatNodes
+#             FacetCentres: <the solve's --FacetCentres, or unset>
 #     killms-target:
 #         params:
 #             NCPU: =steps.killms-memory-plan.NCPU
@@ -89,14 +100,30 @@ cabs:
                 dtype: File
                 required: false
                 info: >
-                    the DicoFacet of the DDFacet run that made the base model (<Output.Name>.DicoFacet): the facets the solve's predict
-                    builds its model grids on.  Without it the facet-grid term is left out and the plan under-predicts at large NPix
+                    fallback when BaseImageName / NodesFile are not given: the DicoFacet of the DDFacet run that made the base model.
+                    It is DDFacet's tessellation, not the solve's (a warning says so).  With neither, the facet-grid and W-kernel terms
+                    are left out and the plan under-predicts at large NPix
             DicoModel:
                 dtype: File
                 required: false
                 info: >
                     the base DicoModel (default: the DicoFacet's name with .DicoModel).  Read for its component pixels, to count only the
                     facets that hold model flux; if missing every facet is counted
+            BaseImageName:
+                dtype: str
+                required: false
+                info: >
+                    the solve's --BaseImageName.  With NodesFile, the plan tessellates as killMS does (<BaseImageName>.parset,
+                    CatNodes = NodesFile, CatCentres = FacetCentres) and reads <BaseImageName>.DicoModel; this is the geometry the
+                    solve builds.  Without it the plan falls back to DicoFacet
+            NodesFile:
+                dtype: File
+                required: false
+                info: the solve's --NodesFile (the ClusterCat); declare this step after anything that rewrites it (snap-nodes)
+            FacetCentres:
+                dtype: File
+                required: false
+                info: the solve's --FacetCentres, when it has one
             SSDModel:
                 dtype: bool
                 default: false
@@ -310,6 +337,28 @@ cabs:
                 return int(max(b - a for a, b in zip(row0[:-1], row0[1:])))
 
 
+            def ms_w_fmax(ms, field=None, block=1000000):
+                """(max |w| in metres, top channel frequency in Hz) of an MS: what killMS sizes its W-kernels from (ClassImageSM2 takes wmax =
+                max |w| of the UVW column, all rows; the kernels' support follows the shortest wavelength).  field=None: every row."""
+                from casacore.tables import table
+                t = table(ms, ack=False, readonly=True)
+                try:
+                    wmax = 0.0
+                    for r0 in range(0, t.nrows(), block):
+                        n = min(block, t.nrows() - r0)
+                        w = np.abs(t.getcol("UVW", startrow=r0, nrow=n)[:, 2])
+                        if field is not None:
+                            w = w[t.getcol("FIELD_ID", startrow=r0, nrow=n) == field]
+                        if w.size:
+                            wmax = max(wmax, float(w.max()))
+                finally:
+                    t.close()
+                spw = table(ms + "::SPECTRAL_WINDOW", ack=False)
+                fmax = float(np.max(spw.getcol("CHAN_FREQ")))
+                spw.close()
+                return wmax, fmax
+
+
             def nchan_selected(nchan_ms, chan_start=0, chan_end=-1, chan_step=1):
                 end = nchan_ms if chan_end is None or chan_end < 0 else min(int(chan_end), nchan_ms)
                 return max(1, len(range(int(chan_start or 0), end, max(1, int(chan_step)))))
@@ -469,7 +518,141 @@ cabs:
                 return out
 
 
-            def kms_peak(model, rows_total, nchan, ssd=False, ndegrid=None, pad2_nz=None, npix=None, rows_chunk=None):
+            def dico_facet_pads(path):
+                """(padded facet sizes, Cell in arcsec) from a DicoFacet: what cf_bytes needs."""
+                import pickle
+                with open(path, "rb") as fh:
+                    d = pickle.load(fh)
+                fac = [v for v in d.values() if isinstance(v, dict) and "NpixFacetPadded" in v]
+                if not fac:
+                    raise RuntimeError("%s has no facets (is it a DicoFacet?)" % path)
+                return [int(v["NpixFacetPadded"]) for v in fac], float(fac[0]["DicoConfigGM"]["Cell"])
+
+
+            # ------------------------------------------------------------------ the W-term kernels
+            # DDFacet's ModCF.ClassWTermModified.InitW (and its Rust port, ddfacet-gridder cf.rs), in numpy: every facet of the tessellation
+            # gets CF-Nw W-planes and as many conjugates, plane i a complex64 (Sup_i * OverS)^2, packed into one buffer per facet
+            # (ModCF.py: NpShared.PackListSquareMatrix).  Sup_i = linspace(CF-Support, SupMax, Nw), made odd, where SupMax is where the
+            # W-kernel of the largest w (wmax / lambda_min) over the PADDED facet's field falls to 1e-3 of its peak.  killMS takes
+            # wmax = max |w| of the UVW column (ClassImageSM2), so a low-declination field (large w) at a wide facet costs much more.
+            _SPHE_P = ((8.203343e-2, -3.644705e-1, 6.278660e-1, -5.335581e-1, 2.312756e-1),
+                       (4.028559e-3, -3.697768e-2, 1.021332e-1, -1.201436e-1, 6.412774e-2))
+            _SPHE_Q = ((1.0, 8.212018e-1, 2.078043e-1), (1.0, 9.599102e-1, 2.918724e-1))
+
+
+            def _eval_sphe(nu):
+                """ModTaper.EvalSphe (the prolate spheroidal approximation), vectorised."""
+                nu = np.abs(np.asarray(nu, float))
+                out = np.zeros_like(nu)
+                for part, (lo, hi, inc_hi) in enumerate(((0.0, 0.75, False), (0.75, 1.0, True))):
+                    sel = (nu >= lo) & ((nu <= hi) if inc_hi else (nu < hi))
+                    d = nu[sel] ** 2 - hi * hi
+                    top = sum(c * d ** k for k, c in enumerate(_SPHE_P[part]))
+                    bot = sum(c * d ** k for k, c in enumerate(_SPHE_Q[part]))
+                    out[sel] = (1.0 - nu[sel] ** 2) * top / bot
+                return out
+
+
+            def _fft2c(a):
+                return np.fft.fftshift(np.fft.fft2(np.fft.ifftshift(a))) / a.size
+
+
+            def _ifft2c(a):
+                return np.fft.fftshift(np.fft.ifft2(np.fft.ifftshift(a))) * a.size
+
+
+            def _zero_pad(a, n):
+                b = np.zeros((n, n), a.dtype)
+                off = (n - a.shape[0]) // 2 + (1 if n % 2 == 0 else 0)
+                b[off:off + a.shape[0], off:off + a.shape[0]] = a
+                return b
+
+
+            _SPHE_W_CACHE = {}
+
+
+            def _sphe_w(sup, n=501):
+                """SpheMachine(Support=sup).MakeSphe(n)[2]: the 111-pixel spheroidal's FFT cut to sup, zero-padded to n, inverse FFT."""
+                key = (int(sup), int(n))
+                if key not in _SPHE_W_CACHE:
+                    ns = 111
+                    x = np.linspace(-1.0, 1.0, ns)
+                    cf = _eval_sphe(np.sqrt(x[:, None] ** 2 + x[None, :] ** 2)).astype(np.complex128)
+                    xc = ns // 2
+                    small = _fft2c(cf)[xc - sup // 2:xc + sup // 2 + 1, xc - sup // 2:xc + sup // 2 + 1]
+                    s = _ifft2c(_zero_pad(small, n))
+                    s[(s.real < 0) | ((s.real == 0) & (s.imag < 0))] = 1e-10       # numpy's complex order: ifzfCF[ifzfCF < 0] = 1e-10
+                    _SPHE_W_CACHE[key] = s
+                return _SPHE_W_CACHE[key]
+
+
+            def cf_supports(npix_padded, cell_arcsec, wmax_m, freq_max_hz, sup=7, nw=100):
+                """The Nw plane supports InitW gives a facet of npix_padded pixels (ModCF.ClassWTermModified.Sups)."""
+                sup, nw = int(sup), int(nw)
+                if nw <= 1:
+                    return np.array([sup + (1 - sup % 2)], np.int64)
+                n = 501
+                lrad = (npix_padded / 2.0) * cell_arcsec / 3600.0 * math.pi / 180.0
+                a = lrad * math.sqrt(2.0)
+                g = np.linspace(-a, a, n)
+                n_1 = np.sqrt(1.0 - g[:, None] ** 2 - g[None, :] ** 2) - 1.0
+                w = np.exp(-2j * math.pi * (wmax_m / (299792458.0 / freq_max_hz)) * n_1) * _sphe_w(sup, n)
+                fw1d = np.abs(_fft2c(w)[(n - 1) // 2, :])
+                fw1d = (fw1d / fw1d.max())[(n - 1) // 2:]
+                sup_max = sup
+                if np.all(np.isfinite(fw1d)):
+                    ind = np.argsort(fw1d, kind="stable")
+                    xs, ys = fw1d[ind], np.arange(fw1d.size, dtype=float)[ind]
+                    if xs[0] <= 1e-3 <= xs[-1]:                                     # interp1d raises outside: InitW keeps SupMax = Sup
+                        sup_max = int(np.interp(1e-3, xs, ys))
+                sups = np.linspace(sup, max(sup_max, sup), nw).astype(np.int64)
+                return sups + (1 - sups % 2)
+
+
+            def cf_bytes(npix_padded, cell_arcsec, wmax_m, freq_max_hz, sup=7, nw=100, overs=11):
+                """Bytes of the packed W-planes (and conjugates) of facets of the given padded sizes: sum 2 * (Sup_i * OverS)^2 * 8."""
+                memo, tot = {}, 0.0
+                for p in np.atleast_1d(npix_padded):
+                    p = int(p)
+                    if p not in memo:
+                        s = cf_supports(p, cell_arcsec, wmax_m, freq_max_hz, sup, nw).astype(float)
+                        memo[p] = 2.0 * float(((s * overs) ** 2).sum()) * 8.0
+                    tot += memo[p]
+                return tot
+
+
+            def kms_geometry(base_image, nodes, ms, centres=None, dicomodel=None, field=None, dico_out=None):
+                """The facets killMS's predict actually builds, and what they cost: kMS.py takes the base image's parset (<base_image>.parset),
+                sets Facets.CatNodes = --NodesFile and Facets.CatCentres = --FacetCentres (when given), and tessellates afresh -- NOT the
+                finalize clean's DicoFacet, which it then overwrites in place (NGC 7541 512 chan: 152 facets / 1.50e8 pad^2 with flux, against
+                the DicoFacet's 180 / 1.147e8).  Needs the DDFacet image (the killms image has it).
+                Returns dico_facet_stats(...) of that tessellation (flux-bearing facets from the DicoModel, default <base_image>.DicoModel) plus
+                cf_gb (the W-kernels: cf_bytes over every facet with the parset's [CF] Support / Nw / OverS, the MS's max |w| and top channel),
+                wmax_m, fmax_hz, cell_arcsec and cf (Support, Nw, OverS)."""
+                gd = ddf_gd(base_image + ".parset")
+                gd["Facets"]["CatNodes"] = os.path.abspath(nodes)
+                gd["Facets"]["CatCentres"] = os.path.abspath(centres) if centres not in (None, "", "None") else None
+                info = ms_info(ms, field=0 if field is None else field)
+                tmp = None
+                if dico_out is None:
+                    tmp = tempfile.mkdtemp(prefix="memplan-kmsgeom-")
+                    dico_out = os.path.join(tmp, "kms.DicoFacet")
+                try:
+                    _, _, pads = tessellate(gd, info["ra"], info["dec"], dico_out=dico_out)
+                    dm = dicomodel or base_image + ".DicoModel"
+                    g = dico_facet_stats(dico_out, dm if os.path.exists(dm) else None)
+                finally:
+                    if tmp:
+                        shutil.rmtree(tmp, ignore_errors=True)
+                wmax, fmax = ms_w_fmax(ms)                      # killMS: max |w| over the whole UVW column (ClassImageSM2)
+                cfp = (int(gd["CF"]["Support"]), int(gd["CF"]["Nw"]), int(gd["CF"]["OverS"]))
+                cell = float(gd["Image"]["Cell"])
+                g.update(cf_gb=cf_bytes(pads, cell, wmax, fmax, sup=cfp[0], nw=cfp[1], overs=cfp[2]) / 1e9, wmax_m=wmax, fmax_hz=fmax,
+                         cell_arcsec=cell, cf=list(cfp), source="killMS tessellation (parset + NodesFile + FacetCentres)")
+                return g
+
+
+            def kms_peak(model, rows_total, nchan, ssd=False, ndegrid=None, pad2_nz=None, npix=None, rows_chunk=None, cf_gb=None):
                 """Predicted max RSS of kMS.py, GB (1e9 B); flat in NDir and NCPU (phase 1).
                 X1c (killMS >= v3.15.15, killMS#46): the rows of the largest --TChunk chunk (chunk_rows(times, TChunk)) * nchan -- the
                 solve holds one chunk's data, flags, weights and two predict buffers, and nothing rows x channels for the whole MS.
@@ -478,7 +661,10 @@ cabs:
                 keeps them for the solve, but only for facets with model flux.  ndegrid = NChanSols (kMS.py sets Freq.NDegridBand from it);
                 pad2_nz = dico_facet_stats(...)["pad2_nz"], the sum of NpixFacetPadded^2 over the facets with flux.  pad2_nz None omits X2n
                 (the plan then under-predicts at large NPix; the caller says so).
-                XS: an SSD DicoModel is a dense image (nterms x NPix x NPix) that the predict expands: [SSD] * NPix^2 * 1e-9 (npix None omits it)."""
+                XS: an SSD DicoModel is a dense image (nterms x NPix x NPix) that the predict expands: [SSD] * NPix^2 * 1e-9 (npix None omits it).
+                XW: the W-term kernels, cf_gb = cf_bytes(padded facet sizes, Cell, wmax, fmax) / 1e9, for every facet of the tessellation (all of
+                them, flux or not): large for a low-declination field (large w) and wide facets (cf_gb None omits it: the plan then
+                under-predicts at large w, ~6 GB on NGC 7541 at NPix 1225; the caller says so)."""
                 c = model["kms"]["coefficients"]
                 terms = {"a": c["a"]}
                 if "X1c" in c:
@@ -489,6 +675,8 @@ cabs:
                     terms["X1"] = c["X1"] * rows_total * nchan * 8e-9
                 if "X2n" in c and pad2_nz is not None and ndegrid is not None:
                     terms["X2n"] = c["X2n"] * ndegrid * pad2_nz * 8e-9
+                if "XW" in c and cf_gb is not None:
+                    terms["XW"] = c["XW"] * cf_gb
                 if ssd:
                     if "XS" in c and npix is not None:
                         terms["XS"] = c["XS"] * npix ** 2 * 1e-9
@@ -520,29 +708,37 @@ cabs:
                 chunk is used).  Memory is flat in NCPU (phase 1), so NCPU is not part of the search.
                 Returns (best or None, every combination tried, {step: (nfacets, sum pad^2)}); an entry is dict(chunk_hours,
                 chan_step, nchan, rows_chunk, peak_gb, planned_gb, fits, limit_step, by_step).
-                kms: None, or dict(ndegrid=NChanSols[, tchunk=--TChunk hours (default 0.5), rows_chunk, rows_total, nchan]) to also require the
+                kms: None, or dict(ndegrid=NChanSols[, tchunk=--TChunk hours (default 0.5), rows_chunk, rows_total, nchan, wmax, fmax]) to also require the
                 killMS solve to fit.  The solve is a separate process that runs after the finalize clean, flat in DDFacet's ChunkHours / ChanStep
                 (it reads its own --TChunk chunks of every channel), so it is one more entry of by_step ("kms") and, when it is the largest,
                 the limit_step.  The facet term uses the sum of pad^2 over ALL facets of the finalize
-                tessellation (CatCentres None, as the plan sees it at the solve): an upper bound of the flux-bearing facets the cab's own plan counts."""
+                tessellation (CatCentres None, as the plan sees it at the solve): an upper bound of the flux-bearing facets the cab's own plan counts.
+                The W-kernel term (XW) needs kms wmax (max |w|, m) and fmax (top channel, Hz); without them it is left out."""
                 import copy
                 steps = CLUSTERED if step == "clustered" else (step,)
-                geoms = {}
+                geoms, pads_by = {}, {}
                 for st in steps:
                     g = copy.deepcopy(GD)
                     if st != "corrected":
                         g["Facets"]["CatCentres"] = None
-                    n, p2, _ = tessellate(g, ms["ra"], ms["dec"], proxy_nodes=proxy_nodes)
+                    n, p2, pads = tessellate(g, ms["ra"], ms["dec"], proxy_nodes=proxy_nodes)
                     geoms[st] = (n, p2)
+                    pads_by[st] = pads
                 base = ddf_inputs_from_gd(GD, ms, mode=mode)
                 sel = GD["Selection"]
                 kms_gb = None
                 if kms is not None:
-                    gk = geoms["finalize"] if "finalize" in geoms else max(geoms.values(), key=lambda g: g[1])
+                    sk = "finalize" if "finalize" in geoms else max(geoms, key=lambda k: geoms[k][1])
+                    gk = geoms[sk]
+                    cf_gb = None
+                    if kms.get("wmax") is not None and kms.get("fmax") is not None:
+                        cf_gb = cf_bytes(pads_by[sk], GD["Image"]["Cell"], float(kms["wmax"]), float(kms["fmax"]), sup=GD["CF"]["Support"],
+                                         nw=GD["CF"]["Nw"], overs=GD["CF"]["OverS"]) / 1e9
                     kms_gb = kms_peak(model, kms.get("rows_total", ms["nrows"]), kms.get("nchan", ms["nchan"]),
                                       ssd=str(base["mode"]).upper().startswith("SSD"), ndegrid=int(kms["ndegrid"]), pad2_nz=gk[1],
                                       npix=GD["Image"]["NPix"],
-                                      rows_chunk=kms.get("rows_chunk", chunk_rows(ms["times"], float(kms.get("tchunk", 0.5)))))[0]
+                                      rows_chunk=kms.get("rows_chunk", chunk_rows(ms["times"], float(kms.get("tchunk", 0.5)))),
+                                      cf_gb=cf_gb)[0]
                 feasible, allp = [], []
                 for cs in chan_steps:
                     nch = nchan_selected(ms["nchan"], sel.get("ChanStart"), sel.get("ChanEnd"), cs)
@@ -573,7 +769,7 @@ cabs:
             _MODEL_JSON = r'''{
               "schema": 2,
               "ddf_form": "D",
-              "source_note": "kMS: phase 6 (2026-11-09), killms v3.15.15 (killMS#46): 10 frozen-set solves on spark (tools/memplan-runs-p6.tsv) + the NGC 7541 TChunk 0.5/0.25 A/B on sparkB (process-tree RSS) + (2026-11-10) the NGC 7541 512-channel pipeline solve on sparkB (NPix 3675, VmHWM); XS held at the phase-5 value (no SSD data)",
+              "source_note": "kMS: phase 6 (2026-11-09/10), killms v3.15.15 (killMS#46): 10 frozen-set solves on spark (tools/memplan-runs-p6.tsv), the NGC 7541 TChunk 0.5/0.25 A/B and the NGC 7541 512-channel pipeline solve on sparkB; geometry is each solve's own tessellation (parset + NodesFile + FacetCentres, memplan-kms-geom.py --kms); XS held at the phase-5 value (no SSD data); XW (W-term kernels, memplan_lib.cf_bytes, exact against DDFacet's kernels and the NGC 7541 tracemalloc profile) held at 1",
               "fitted": "2026-10-22",
               "metric": "maxrss",
               "units": "GB = 1e9 B of peak max RSS of the DDF.py / kMS.py process",
@@ -583,7 +779,7 @@ cabs:
                 "kms_runs": [
                   {
                     "file": "research/memplan-p6-runs.tsv",
-                    "sha256": "32b37f8749efdcc5"
+                    "sha256": "99b5a5a52fa46d0f"
                   }
                 ],
                 "kms_x86_roots": [],
@@ -646,21 +842,24 @@ cabs:
               },
               "kms": {
                 "coefficients": {
-                  "a": 1.9931270062093998,
-                  "X1c": 17.711712997853294,
-                  "X2n": 1.179133847245005,
-                  "XS": 734.8050773808027
+                  "a": 0.5422886310363104,
+                  "X1c": 11.124795956136566,
+                  "X2n": 1.2892533886796418,
+                  "XS": 734.8050773808027,
+                  "XW": 1.0
                 },
                 "features": {
                   "a": "constant floor (GB)",
                   "X1c": "rows of the largest --TChunk chunk (memplan_lib.chunk_rows(times, TChunk)) * nchan, times 8e-9: one chunk's data, flags, weights and the two predict buffers (killMS >= v3.15.15, killMS#46)",
                   "X2n": "NDegridBand (= NChanSols: kMS.py sets Freq.NDegridBand from it) * sum of NpixFacetPadded^2 over the facets that hold model flux (a model component pixel inside the facet's padded square), times 8e-9: the predict's per-facet model grids (complex64, one plane per degrid band; killMS keeps them only for facets with flux)",
-                  "XS": "[sky model is SSD] * NPix^2 * 1e-9: an SSD DicoModel is a dense image (Comp Vals, nterms x NPix x NPix) that the predict expands, so its cost follows the image size (HMP models are sparse pixel lists)"
+                  "XS": "[sky model is SSD] * NPix^2 * 1e-9: an SSD DicoModel is a dense image (Comp Vals, nterms x NPix x NPix) that the predict expands, so its cost follows the image size (HMP models are sparse pixel lists)",
+                  "XW": "the W-term kernels, GB: memplan_lib.cf_bytes(padded facet sizes, Cell, max |w|, top channel frequency, CF-Support, CF-Nw, CF-OverS) / 1e9 over EVERY facet of the solve's tessellation -- CF-Nw W-planes and conjugates, plane i complex64 (Sup_i * OverS)^2, Sup_i up to where the kernel of max |w| over the padded facet falls to 1e-3 (DDFacet ModCF.InitW; exact against DDFacet's kernels and the NGC 7541 tracemalloc profile)"
                 },
                 "npoints": 13,
                 "underdetermined": false,
                 "fixed_terms": {
-                  "XS": 734.8050773808027
+                  "XS": 734.8050773808027,
+                  "XW": 1.0
                 },
                 "dropped_terms": []
               }
@@ -681,14 +880,27 @@ cabs:
             warnings = []
             geom = None
             _df = _opt("DicoFacet")
-            if _df and os.path.exists(_df):
+            _base, _nodes = _opt("BaseImageName"), _opt("NodesFile")
+            if _base and _nodes:
+                geom = L.kms_geometry(_base, _nodes, MS, centres=_opt("FacetCentres"), dicomodel=_opt("DicoModel"),
+                                      field=int(FieldID))
+                if geom["n_comp"] is None:
+                    warnings.append("no DicoModel: every facet is counted as holding flux, the prediction is high")
+            elif _df and os.path.exists(_df):
+                warnings.append("facets from the DicoFacet (DDFacet's tessellation), not the solve's: pass BaseImageName + NodesFile"
+                                " (+ FacetCentres)")
                 _dm = _opt("DicoModel") or (_df[:-len(".DicoFacet")] + ".DicoModel" if _df.endswith(".DicoFacet") else None)
                 if not (_dm and os.path.exists(_dm)):
                     warnings.append("no DicoModel (%s): every facet is counted as holding flux, the prediction is high" % _dm)
                     _dm = None
                 geom = L.dico_facet_stats(_df, _dm)
+                _pads, _cell = L.dico_facet_pads(_df)
+                _wmax, _fmax = L.ms_w_fmax(MS)     # killMS: the whole UVW column
+                geom.update(cf_gb=L.cf_bytes(_pads, _cell, _wmax, _fmax) / 1e9, wmax_m=_wmax, fmax_hz=_fmax, cell_arcsec=_cell,
+                            cf=[7, 100, 11], source="DicoFacet (DDFacet's tessellation; CF at DDFacet's defaults)")
             else:
-                warnings.append("no DicoFacet: the facet-grid term is left out and the prediction is LOW at large NPix")
+                warnings.append("no facets (BaseImageName + NodesFile, or DicoFacet): the facet-grid and W-kernel terms are left out "
+                                "and the prediction is LOW at large NPix / large w")
             ndegrid = int(NChanSolsWant)
             _want = float(TChunkWant)
             _floor = max(0.1, float(_opt("dtMin", 5.0)) / 60.0)
@@ -698,7 +910,8 @@ cabs:
                 rows_chunk = L.chunk_rows(ms["times"], TChunk)
                 PeakGB, terms = L.kms_peak(model, ms["nrows"], ms["nchan"], ssd=ssd, ndegrid=ndegrid,
                                            pad2_nz=geom["pad2_nz"] if geom else None,
-                                           npix=geom["npix_est"] if geom else None, rows_chunk=rows_chunk)
+                                           npix=geom["npix_est"] if geom else None, rows_chunk=rows_chunk,
+                                           cf_gb=geom["cf_gb"] if geom else None)
                 PlannedGB = PeakGB * margin
                 Fits = bool(PlannedGB <= ram_gb)
                 tried.append(dict(tchunk=TChunk, rows_chunk=rows_chunk, peak_gb=round(PeakGB, 3), fits=Fits))
@@ -717,6 +930,8 @@ cabs:
             if geom:
                 print("model facets: %d (%d with flux), sum padded px^2 %.4g (%.4g with flux), %d degrid bands"
                       % (geom["nfac"], geom["nfac_nz"], geom["pad2"], geom["pad2_nz"], ndegrid))
+                print("W-kernels: %.2f GB (max |w| %.0f m, top channel %.1f MHz, Cell %.3g arcsec)"
+                      % (geom["cf_gb"], geom["wmax_m"], geom["fmax_hz"] / 1e6, geom["cell_arcsec"]))
             for _w in warnings:
                 print("WARNING: " + _w)
             print("predicted peak %.1f GB, x%g = %.1f GB; budget %.1f GB (%s); %d core(s)%s -> %s"
