@@ -180,7 +180,7 @@ wheels = [
 
 [[package]]
 name = "dde-cargo"
-version = "0.3.9"
+version = "0.3.10"
 source = { editable = "." }
 dependencies = [
     { name = "pyparsing" },
