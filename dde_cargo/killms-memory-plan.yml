@@ -77,7 +77,7 @@ vars:
       name: killms
       # Pin this to whatever the recipe's killMS step uses (tools/check-pins.py).  The plan itself needs only numpy
       # and casacore.
-      version: v3.15.16
+      version: v3.15.17
 
 cabs:
     killms-memory-plan:

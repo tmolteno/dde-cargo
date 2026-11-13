@@ -10,6 +10,43 @@ DDFacet's `CHANGES.md` and commit history, killMS's commit history, and
 
 ## [Unreleased]
 
+## [0.3.11] - 2026-11-14
+
+### Container images
+
+- DDFacet `ghcr.io/tmolteno/ddfacet:v0.16.13` → `v0.16.14`.
+- killMS `ghcr.io/tmolteno/killms:v3.15.16` → `v3.15.17`.
+- Image pins are those of the cabs synced from meerkat_imaging, equal to the latest upstream tags.
+
+### DDFacet
+
+#### `v0.16.14` (2026-11-14)
+- Stack the smooth beam a block of directions at a time (#131) (`7121e238`)
+- CHANGES: stack the smooth beam a block of directions at a time (#131) (`8b3c1cd8`)
+- rust: sum the degrid batch's channel frequencies with an iterator (clippy 1.100) (`f8520a0f`)
+- Refuse an InitDicoModel whose HMP scale functions differ (#121) (`7a35783b`)
+- Explain automasking refusals and empty WSCMS auto-masks (#103, #110) (`38cc3edb`)
+- Refuse --DDESolutions-Type Krigging until #128 is fixed (`329555bf`)
+- Image: fix glibc's mmap threshold at 4 MB (#133) (`ff999c74`)
+
+### killMS
+
+#### `v3.15.17` (2026-11-14)
+- Skip a fully flagged interval of a 2-correlation MS instead of aborting the solve (#47) (`a27246d`)
+- CHANGELOG: skip a fully flagged 2-correlation interval instead of aborting the solve (#47) (`3806330`)
+
+### Cab changes (meerkat_imaging)
+
+meerkat_imaging `24bce19` → `dd01095`:
+
+- Image pin updates only.
+
+### Packaging
+
+- Package version bumped from `0.3.10` to `0.3.11`.
+- Cabs and schemas synced from `meerkat_imaging/cabs` (`invoke sync`).
+- Changelog generated from the `../DDFacet` and `../killMS` commit history and meerkat_imaging's cab history.
+
 ## [0.3.10] - 2026-11-11
 
 ### Container images
@@ -658,7 +695,8 @@ meerkat_imaging `529047a` → `76ccf43`:
   plus the `ddfacet-memory-plan` and `killms-memory-plan` cabs.
 - PyPI trusted publishing (OIDC) on `vX.Y.Z` tags.
 
-[Unreleased]: https://github.com/tmolteno/dde-cargo/compare/v0.3.10...HEAD
+[Unreleased]: https://github.com/tmolteno/dde-cargo/compare/v0.3.11...HEAD
+[0.3.11]: https://github.com/tmolteno/dde-cargo/compare/v0.3.10...v0.3.11
 [0.3.10]: https://github.com/tmolteno/dde-cargo/compare/v0.3.9...v0.3.10
 [0.3.9]: https://github.com/tmolteno/dde-cargo/compare/v0.3.8...v0.3.9
 [0.3.8]: https://github.com/tmolteno/dde-cargo/compare/v0.3.7...v0.3.8
