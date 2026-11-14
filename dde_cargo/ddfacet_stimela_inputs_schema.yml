@@ -25,6 +25,14 @@ Data:
       Use -1 for native dataset chunking (required in zarr mode). (Default: 0)'
     required: false
     dtype: int
+  Prefetch:
+    info: 'Read the next chunk in the background while the current one is processed.
+      This keeps two chunks'' visibility, flag, weight and BDA buffers in memory at
+      once. 0 reads each chunk only after the previous one is released: it saves one
+      chunk of buffers, but puts every chunk read on the critical path and disables
+      the pipelined degrid overlap. (Default: True)'
+    required: false
+    dtype: bool
   Sort:
     info: 'if True, data will be resorted by baseline-time order internally. This
       usually speeds up processing. (Default: False)'
@@ -194,6 +202,19 @@ Facets:
     info: 'For cleaning, use oversize PSF relative to size of facet. (Default: 1.0)'
     required: false
     dtype: float
+  PSFPass:
+    info: 'Where the PSF is gridded. "joint": in the same pass over the data as the
+      first dirty image (today''s behaviour). "separate": in a pass of its own before
+      the dirty pass, so the PSF facet machine (grids, and its CFs when --Facets-PSFOversize
+      differs from 1) is gone before the dirty and residual grids are allocated. This
+      takes the PSF machine out of the dirty pass''s peak memory (the first pass then
+      peaks at max(PSF pass, dirty pass) instead of their sum), at the price of reading
+      and gridding the data once more (no degridding in that pass). Products are bit-identical.
+      Falls back to "joint", with a log message, when the PSF machine is needed again
+      later: --Comp-Sparsification above 1, --Deconv-ApproximatePSF, no major cycles,
+      or a valid cached dirty image. (Default: joint)'
+    required: false
+    choices: [joint, separate]
   PSFFacets:
     info: 'Number of PSF facets to make. 0: same as NFacets (one PSF per facet) 1:
       one PSF for entire field. (Default: 0)'

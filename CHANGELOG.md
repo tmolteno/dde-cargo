@@ -10,6 +10,36 @@ DDFacet's `CHANGES.md` and commit history, killMS's commit history, and
 
 ## [Unreleased]
 
+## [0.3.14] - 2026-11-15
+
+### Container images
+
+- DDFacet `ghcr.io/tmolteno/ddfacet:v0.16.16` → `v0.16.16`.
+- killMS `ghcr.io/tmolteno/killms:v3.15.19` → `v3.15.19`.
+- Image pins are those of the cabs synced from meerkat_imaging, equal to the latest upstream tags.
+
+### DDFacet
+
+- Unchanged at `v0.16.16`.
+
+### killMS
+
+- Unchanged at `v3.15.19`.
+
+### Cab changes (meerkat_imaging)
+
+meerkat_imaging `69692a9` → `8814c9e`:
+
+- ddfacet cab schema: Data.Prefetch and Facets.PSFPass (DDFacet#145, #146); unset = no flag (`b2782ec`)
+- memory planner: Prefetch 0 / PSFPass separate as opt-in options (AllowLowMemOptions, default off), model terms P0/PS absent until fitted (`6a9985e`)
+- memory planner: fit P0/PS/PL from the NGC 7541 A/B, low-memory options on by default (`8814c9e`)
+
+### Packaging
+
+- Package version bumped from `0.3.13` to `0.3.14`.
+- Cabs and schemas synced from `meerkat_imaging/cabs` (`invoke sync`).
+- Changelog generated from the `../DDFacet` and `../killMS` commit history and meerkat_imaging's cab history.
+
 ## [0.3.13] - 2026-11-15
 
 ### Container images
@@ -767,7 +797,8 @@ meerkat_imaging `529047a` → `76ccf43`:
   plus the `ddfacet-memory-plan` and `killms-memory-plan` cabs.
 - PyPI trusted publishing (OIDC) on `vX.Y.Z` tags.
 
-[Unreleased]: https://github.com/tmolteno/dde-cargo/compare/v0.3.13...HEAD
+[Unreleased]: https://github.com/tmolteno/dde-cargo/compare/v0.3.14...HEAD
+[0.3.14]: https://github.com/tmolteno/dde-cargo/compare/v0.3.13...v0.3.14
 [0.3.13]: https://github.com/tmolteno/dde-cargo/compare/v0.3.12...v0.3.13
 [0.3.12]: https://github.com/tmolteno/dde-cargo/compare/v0.3.11...v0.3.12
 [0.3.11]: https://github.com/tmolteno/dde-cargo/compare/v0.3.10...v0.3.11

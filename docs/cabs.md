@@ -153,7 +153,7 @@ solutions applied.  `ddfacet-memory-plan` can choose `Parallel.NCPU`,
 ### Inputs
 
 <details>
-<summary><code>Data</code> (6 parameters)</summary>
+<summary><code>Data</code> (7 parameters)</summary>
 
 *Input Measurement Set, column and chunking.*
 
@@ -163,6 +163,7 @@ solutions applied.  `ddfacet-memory-plan` can choose `Parallel.NCPU`,
 | `Data.ColName` | `str` | no | — | MS column to image (Default: CORRECTED_DATA) |
 | `Data.ChunkHours` | `float` | no | — | Process data in chunks of <=N hours. Use 0 for no chunking. (Default: 0.0) |
 | `Data.ChunkRows` | `int` | no | — | Process data in chunks of <=N rows, for dask mode. Overrides ChunkHours. Use -1 for native dataset chunking (required in zarr mode). (Default: 0) |
+| `Data.Prefetch` | `bool` | no | — | Read the next chunk in the background while the current one is processed. This keeps two chunks' visibility, flag, weight and BDA buffers in memory at once. 0 reads each chunk only after the previous one is released: it saves one chunk of buffers, but puts every chunk read on the critical path and disables the pipelined degrid overlap. (Default: True) |
 | `Data.Sort` | `bool` | no | — | if True, data will be resorted by baseline-time order internally. This usually speeds up processing. (Default: False) |
 | `Data.Dask` | `bool` | no | — | If True, uses dask-ms IO layer instead of casacore (Default: False) |
 
@@ -248,7 +249,7 @@ solutions applied.  `ddfacet-memory-plan` can choose `Parallel.NCPU`,
 </details>
 
 <details>
-<summary><code>Facets</code> (12 parameters)</summary>
+<summary><code>Facets</code> (13 parameters)</summary>
 
 *Facet tessellation, direction nodes and DD metadata.*
 
@@ -261,6 +262,7 @@ solutions applied.  `ddfacet-memory-plan` can choose `Parallel.NCPU`,
 | `Facets.DiamMin` | `float` | no | — | Min facet size, for tessellations. Smaller facets will be merged. (Default: 0.0) |
 | `Facets.MixingWidth` | `str` | no | — | Sigma of the gaussian (in pixels) being used to mix the facets on their edges (Default: 10) |
 | `Facets.PSFOversize` | `float` | no | — | For cleaning, use oversize PSF relative to size of facet. (Default: 1.0) |
+| `Facets.PSFPass` | `str` | no | — | Where the PSF is gridded. "joint": in the same pass over the data as the first dirty image (today's behaviour). "separate": in a pass of its own before the dirty pass, so the PSF facet machine (grids, and its CFs when --Facets-PSFOversize differs from 1) is gone before the dirty and residual grids are allocated. This takes the PSF machine out of the dirty pass's peak memory (the first pass then peaks at max(PSF pass, dirty pass) instead of their sum), at the price of reading and gridding the data once more (no degridding in that pass). Products are bit-identical. Falls back to "joint", with a log message, when the PSF machine is needed again later: --Comp-Sparsification above 1, --Deconv-ApproximatePSF, no major cycles, or a valid cached dirty image. (Default: joint) Choices: `joint`, `separate` |
 | `Facets.PSFFacets` | `int` | no | — | Number of PSF facets to make. 0: same as NFacets (one PSF per facet) 1: one PSF for entire field. (Default: 0) |
 | `Facets.Padding` | `float` | no | — | Facet padding factor. (Default: 1.7) |
 | `Facets.Circumcision` | `str` | no | — | Set to non-0 to override NPixMin computation in FacetsToIm(). Debugging option, really. (Default: 0) |
@@ -1478,7 +1480,7 @@ pre-created as an existing file.
 ### Inputs
 
 <details>
-<summary><code>Inputs</code> (22 parameters)</summary>
+<summary><code>Inputs</code> (23 parameters)</summary>
 
 | Parameter | Type | Required | Default | Description |
 |---|---|---|---|---|
@@ -1503,6 +1505,7 @@ pre-created as an existing file.
 | `WantNCPU` | `int` | no | — | worker count you would like; also the cap.  Default: the usable cores (the CPU affinity set, so a taskset/cpuset is respected) |
 | `Margin` | `float` | no | `1.25` | safety factor on the predicted peak before it is compared with RamGB |
 | `Prefer` | `str` | no | `fidelity` | 'fidelity' keeps the full band while any chunk length fits; 'speed' takes the largest chunk first and subsamples the band if it must Choices: `fidelity`, `speed` |
+| `AllowLowMemOptions` | `bool` | no | `True` | the DDFacet image accepts --Data-Prefetch and --Facets-PSFPass (DDFacet#145 / #146; DDFacet >= v0.16.16, the image this cab is pinned to).  True (the default): the search may use PSFPass separate, then Prefetch 0 (in that order, before shrinking ChunkHours), for as many of them as the model has a fitted saving coefficient (and PSFPass separate only at the PSFOversize it was fitted at).  False: the plan never chooses or emits them; set it for a DDFacet image older than v0.16.16 |
 | `PlanOut` | `File` | no | `ddfacet-memory-plan.json` | where to write the plan, as JSON |
 
 </details>
@@ -1514,6 +1517,8 @@ pre-created as an existing file.
 | `NCPU` | `int` | no | — |
 | `ChunkHours` | `float` | no | — |
 | `ChanStep` | `int` | no | — |
+| `Prefetch` | `int` | no | — |
+| `PSFPass` | `str` | no | — |
 | `PeakGB` | `float` | no | — |
 | `PlannedGB` | `float` | no | — |
 | `RamGBUsed` | `float` | no | — |

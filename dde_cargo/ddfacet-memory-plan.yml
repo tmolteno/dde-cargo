@@ -81,6 +81,19 @@
 # selects every Nth channel and DISCARDS (N-1)/N of the data.  (Behaviour is otherwise unchanged.)
 # Exit status: nonzero when nothing fits, with the plan JSON written.
 #
+# LOW-MEMORY OPTIONS (on by default since the pin is DDFacet v0.16.16): DDFacet's --Data-Prefetch 0 (one chunk's visibility / flag
+# / weight / BDA buffers fewer, slower reads; DDFacet#145) and --Facets-PSFPass separate (the PSF facet machine leaves the first
+# pass's peak, at one more read of the data; DDFacet#146).  Both are bit-identical in the images.  Images older than v0.16.16 do not
+# accept them: set the input AllowLowMemOptions false for those.  The model must also carry a fitted coefficient for the option (P0
+# for Prefetch; PS and PL for PSFPass, in memplan-model.json, from the NGC 7541 A/B, research/MEMORY_PLAN_CALIBRATION.md section
+# 13): with none, the option is predicted to change nothing and is never chosen.  PSFPass separate only saves in the pass that
+# grids the PSF and is only counted at the PSFOversize it was measured at (1.5); at another one the plan does not use it.  Search
+# order: at each ChunkHours, largest first, the default options, then PSFPass
+# separate, then Prefetch 0, then both; ChunkHours is shrunk only when none of those fits, and ChanStep raised only after that.
+# Prefer speed uses the options only to keep the largest chunk at the smallest ChanStep (they cost wall time).  The outputs
+# Prefetch (1) and PSFPass (joint) are the defaults unless chosen, and are added to Flags only when non-default; recipes wire
+# them as UNSET unless non-default, so the DDF command line is unchanged when the option is off (see white-belt-4-ddfacet.yml).
+#
 # History: v0.10 vendored the package cab; v0.12 added the threaded (flat-NCPU) planning of 2026-09-27; the model
 # was recalibrated on 2026-10-18 and moved here, out of DDFacet.
 
@@ -203,6 +216,15 @@ cabs:
                 default: fidelity
                 choices: [fidelity, speed]
                 info: "'fidelity' keeps the full band while any chunk length fits; 'speed' takes the largest chunk first and subsamples the band if it must"
+            AllowLowMemOptions:
+                dtype: bool
+                default: true
+                info: >
+                    the DDFacet image accepts --Data-Prefetch and --Facets-PSFPass (DDFacet#145 / #146; DDFacet >= v0.16.16,
+                    the image this cab is pinned to).  True (the default): the search may use PSFPass separate, then
+                    Prefetch 0 (in that order, before shrinking ChunkHours), for as many of them as the model has a fitted
+                    saving coefficient (and PSFPass separate only at the PSFOversize it was fitted at).  False: the plan never
+                    chooses or emits them; set it for a DDFacet image older than v0.16.16
             PlanOut:
                 dtype: File
                 default: ddfacet-memory-plan.json
@@ -220,6 +242,16 @@ cabs:
             ChanStep:
                 dtype: int
                 info: pass to --Selection-ChanStep
+            Prefetch:
+                dtype: int
+                info: >
+                    --Data-Prefetch: 1 (DDFacet's default) unless the plan chose 0; wire it only when it is 0
+                    (white-belt-4-ddfacet.yml does), as the pinned DDFacet does not accept the flag
+            PSFPass:
+                dtype: str
+                info: >
+                    --Facets-PSFPass: joint (DDFacet's default) unless the plan chose separate; wire it only when it is
+                    separate, as the pinned DDFacet does not accept the flag
             PeakGB:
                 dtype: float
                 info: predicted max RSS of the DDF.py process at those settings, GB (1e9 B), without Margin
@@ -234,7 +266,7 @@ cabs:
                 info: facets in the tessellation the prediction used
             Flags:
                 dtype: str
-                info: the flags, ready to paste
+                info: the flags, ready to paste (--Data-Prefetch 0 / --Facets-PSFPass separate only when chosen)
             Plan:
                 dtype: File
                 must_exist: false
@@ -515,9 +547,34 @@ cabs:
             CLUSTERED = ("initial", "finalize", "corrected")     # the passes that have a ClusterCat; Step "clustered" = the max of these
 
 
-            def ddf_peak(model, pad2, nfacets, nband, rows_chunk, nchan, nant, beam_nband, mode="HMP", step="initial"):
+            PSF_STEPS = ("target", "initial", "corrected")        # the runs that grid the PSF (fresh cache); finalize loads it (Cache.PSF force)
+
+
+            def psf_fit_applies(model, psf_oversize):
+                """True when the model's PSFPass coefficients (PS, PL) were measured at this Facets.PSFOversize.  The PSF machine's CFs
+                do not scale with X1a, so the saving is a statement about one PSFOversize: at another one (or an unknown one, or a model
+                without the recorded fit) the planner counts no saving."""
+                fit = (model["ddf"].get("lowmem_fit") or {}).get("PSFOversize")
+                if fit is None or psf_oversize in (None, "", "None"):
+                    return False
+                try:
+                    return abs(float(psf_oversize) - float(fit)) < 1e-9
+                except (TypeError, ValueError):
+                    return False
+
+
+            def ddf_peak(model, pad2, nfacets, nband, rows_chunk, nchan, nant, beam_nband, mode="HMP", step="initial",
+                         prefetch=1, psfpass="joint", psf_oversize=None):
                 """Predicted max RSS of DDF.py, GB (1e9 B), and the per-term breakdown (model form D, design section 6).
-                step: target (the ddfacet-target Clean on grid facets), initial (baseline), finalize or corrected."""
+                step: target (the ddfacet-target Clean on grid facets), initial (baseline), finalize or corrected.
+                prefetch / psfpass: DDFacet's --Data-Prefetch (1 = default) and --Facets-PSFPass (joint = default), DDFacet#145 / #146.
+                Prefetch 0 adds the model's "P0" term (P0 * rows_chunk * nchan * 16e-9, the X3 unit; fitted negative: one chunk's buffers
+                less, in every pass).  PSFPass separate takes the PSF machine out of the FIRST pass only: that pass drops by PS * pad2 *
+                16e-9 (the X1a unit), but the later cycles are unchanged by it and then set the run's peak, at PL * pad2 * 16e-9 (X1a unit,
+                relative to the joint first pass).  The run's peak is the max of the two, so the term added is max(PS, PL) * pad2 * 16e-9 (key
+                PS or PL, whichever binds).  Only the steps that grid the PSF (PSF_STEPS; finalize loads it from the cache) get it, only at
+                the PSFOversize the coefficients were measured at (psf_fit_applies), and only if the model has all of PS, PL.  A
+                coefficient the model does not carry, or a case it does not cover, changes nothing (never a claimed saving)."""
                 c = model["ddf"]["coefficients"]
                 x1 = pad2 * 16e-9
                 terms = {"a": c["a"],
@@ -527,6 +584,12 @@ cabs:
                          "X4b": c["X4b"] * beam_nband * nant * nfacets * 8e-9}
                 if step == "corrected" and beam_nband:
                     terms["X4c"] = c["X4c"] * nant * nfacets * nchan * 8e-9
+                if int(prefetch) == 0 and c.get("P0", 0.0):
+                    terms["P0"] = c["P0"] * rows_chunk * nchan * 16e-9
+                if (psfpass == "separate" and step in PSF_STEPS and c.get("PS", 0.0) and "PL" in c
+                        and psf_fit_applies(model, psf_oversize)):
+                    key, coef = ("PS", c["PS"]) if c["PS"] >= c["PL"] else ("PL", c["PL"])
+                    terms[key] = coef * x1
                 m = (mode or "HMP").upper()
                 if m in ("SSD2", "SSD3"):
                     terms["mode=" + m] = c.get("mode=" + m, 0.0)
@@ -865,9 +928,48 @@ cabs:
                             mode=mode or GD["Deconv"]["Mode"])
 
 
+            def lowmem_options(model, GD=None, allow=False, steps=None):
+                """The low-memory DDFacet option sets the planner may use, in the order it tries them: [(prefetch, psfpass, why), ...],
+                always starting with the default (1, "joint", "default").  Empty beyond the default unless `allow` (the DDFacet in use
+                accepts --Data-Prefetch / --Facets-PSFPass: DDFacet#145 / #146, DDFacet >= v0.16.16 in the pin) AND the model carries a
+                NEGATIVE coefficient for the option (P0; PS with PL for PSFPass; fitted from the NGC 7541 A/B, section 13 of
+                research/MEMORY_PLAN_CALIBRATION.md): without one the planner has no saving to count on.
+                PSFPass separate is also not offered when DDFacet would fall back to joint (Comp.Sparsification > 1, Deconv.ApproximatePSF),
+                when the GD's Facets.PSFOversize is not the one the model's PS / PL were measured at (or is unknown), or when none of
+                `steps` grids the PSF (PSF_STEPS).
+                Order: separate (no fidelity change, one more read of the data), then Prefetch 0 (slower I/O), then both."""
+                sets = [(1, "joint", "default")]
+                if not allow:
+                    return sets
+                c = model["ddf"]["coefficients"]
+                sep = c.get("PS", 0.0) < 0 and "PL" in c
+                if sep and GD is not None:
+                    sp = (GD.get("Comp") or {}).get("Sparsification") or 0
+                    try:
+                        sp = max(float(x) for x in (sp if isinstance(sp, (list, tuple)) else [sp]))
+                    except (TypeError, ValueError):
+                        sp = 2                                          # unreadable: assume DDFacet falls back to joint
+                    if sp > 1 or (GD.get("Deconv") or {}).get("ApproximatePSF"):
+                        sep = False
+                    if not psf_fit_applies(model, (GD.get("Facets") or {}).get("PSFOversize")):
+                        sep = False
+                elif sep:
+                    sep = False                                         # no GD, no PSFOversize to check
+                if sep and steps is not None and not any(st in PSF_STEPS for st in steps):
+                    sep = False
+                pf0 = c.get("P0", 0.0) < 0
+                if sep:
+                    sets.append((1, "separate", "PSFPass separate: PSF machine out of the first pass's peak"))
+                if pf0:
+                    sets.append((0, "joint", "Prefetch 0: one chunk's buffers fewer"))
+                if sep and pf0:
+                    sets.append((0, "separate", "PSFPass separate and Prefetch 0"))
+                return sets
+
+
             def plan_ddf(model, GD, ms, ram_gb, margin=1.25, step="initial", mode=None,
                          chunk_choices=(4.0, 2.0, 1.0, 0.5), prefer="fidelity", chan_steps=(1, 2, 3, 4, 5, 6, 8, 10, 16, 20),
-                         proxy_nodes=0, kms=None):
+                         proxy_nodes=0, kms=None, allow_lowmem=False):
                 """Search ChunkHours x ChanStep for the largest ChunkHours whose predicted peak x margin fits ram_gb.
 
                 step: target | initial | finalize | corrected, or "clustered" = the largest of initial / finalize / corrected
@@ -885,7 +987,14 @@ cabs:
                 (it reads its own --TChunk chunks of every channel), so it is one more entry of by_step ("kms") and, when it is the largest,
                 the limit_step.  The facet term uses the sum of pad^2 over ALL facets of the finalize
                 tessellation (CatCentres None, as the plan sees it at the solve): an upper bound of the flux-bearing facets the cab's own plan counts.
-                The W-kernel term (XW) needs kms wmax (max |w|, m) and fmax (top channel, Hz); without them it is left out."""
+                The W-kernel term (XW) needs kms wmax (max |w|, m) and fmax (top channel, Hz); without them it is left out.
+                allow_lowmem (default False): the DDFacet in use accepts --Data-Prefetch / --Facets-PSFPass (see lowmem_options).  False
+                reproduces the plan of the version without these options exactly, and every entry says prefetch 1 / psfpass joint.  True:
+                option sets (lowmem_options: default, PSFPass separate, Prefetch 0, both) enter the search.  Fidelity preference: the
+                largest ChunkHours at the smallest ChanStep, and AT THAT CHUNK the first option set in that order that fits -- so the options are
+                tried before ChunkHours is shrunk, and ChunkHours before ChanStep is raised.  Speed preference: the largest chunk, then
+                the smallest ChanStep at it, then the first option set; the options only keep the largest chunk from costing band, they are not
+                used to avoid a shrink of the chunk (the options cost wall time).  Each entry carries prefetch, psfpass, and lowmem_why."""
                 import copy
                 steps = CLUSTERED if step == "clustered" else (step,)
                 geoms, pads_by = {}, {}
@@ -915,29 +1024,34 @@ cabs:
                                       npix=GD["Image"]["NPix"],
                                       rows_chunk=kms.get("rows_chunk", chunk_rows(ms["times"], kms_tchunk)),
                                       cf_gb=cf_gb)[0]
+                option_sets = lowmem_options(model, GD, allow_lowmem, steps=steps)
+                psf_os = (GD.get("Facets") or {}).get("PSFOversize")
                 feasible, allp = [], []
                 for cs in chan_steps:
                     nch = nchan_selected(ms["nchan"], sel.get("ChanStart"), sel.get("ChanEnd"), cs)
                     for ch in chunk_choices:
                         rows = chunk_rows(ms["times"], ch)
-                        per = {st: ddf_peak(model, geoms[st][1], geoms[st][0], rows_chunk=rows, nchan=nch, step=st, **base)[0]
-                               for st in steps}
-                        if kms_gb is not None:
-                            per["kms"] = kms_gb
-                        lim = max(per, key=per.get)
-                        peak = per[lim]
-                        e = dict(chunk_hours=ch, chan_step=cs, nchan=nch, rows_chunk=rows, peak_gb=peak, kms_tchunk=kms_tchunk,
-                                 planned_gb=peak * margin, fits=bool(peak * margin <= ram_gb), limit_step=lim,
-                                 by_step={k: round(v, 3) for k, v in per.items()})
-                        allp.append(e)
-                        if e["fits"]:
-                            feasible.append(e)
+                        for rank, (pre, psf, why) in enumerate(option_sets):
+                            per = {st: ddf_peak(model, geoms[st][1], geoms[st][0], rows_chunk=rows, nchan=nch, step=st,
+                                                prefetch=pre, psfpass=psf, psf_oversize=psf_os, **base)[0]
+                                   for st in steps}
+                            if kms_gb is not None:
+                                per["kms"] = kms_gb
+                            lim = max(per, key=per.get)
+                            peak = per[lim]
+                            e = dict(chunk_hours=ch, chan_step=cs, nchan=nch, rows_chunk=rows, peak_gb=peak, kms_tchunk=kms_tchunk,
+                                     planned_gb=peak * margin, fits=bool(peak * margin <= ram_gb), limit_step=lim,
+                                     by_step={k: round(v, 3) for k, v in per.items()},
+                                     prefetch=pre, psfpass=psf, lowmem_rank=rank, lowmem_why=why)
+                            allp.append(e)
+                            if e["fits"]:
+                                feasible.append(e)
                 if not feasible:
                     return None, allp, geoms
                 if prefer == "speed":
-                    best = max(feasible, key=lambda e: (e["chunk_hours"], -e["chan_step"]))
+                    best = max(feasible, key=lambda e: (e["chunk_hours"], -e["chan_step"], -e["lowmem_rank"]))
                 else:
-                    best = min(feasible, key=lambda e: (e["chan_step"], -e["chunk_hours"]))
+                    best = min(feasible, key=lambda e: (e["chan_step"], -e["chunk_hours"], e["lowmem_rank"]))
                 return best, allp, geoms
             '''
             L = types.ModuleType("memplan_lib")
@@ -993,6 +1107,9 @@ cabs:
                   "X3": 6.367026334441284,
                   "X4b": 1153.5725630276554,
                   "X4c": 439.3465588376699,
+                  "P0": -0.6135809358465611,
+                  "PS": -2.95685363292716,
+                  "PL": -1.5455631066798017,
                   "mode=SSD2": 7.440557301556507,
                   "mode=SSD3": 5.124512257042504,
                   "step=target": 5.036426414047182,
@@ -1006,6 +1123,9 @@ cabs:
                   "X3": "rows in one Data.ChunkHours chunk * nchan after Selection.ChanStep, times 16e-9: visibility buffers",
                   "X4b": "Beam.NBand * NA * nfacets, times 8e-9: beam Jones cubes, one per beam band (no channel axis); 0 with the beam off",
                   "X4c": "[step == corrected] * NA * nfacets * nchan, times 8e-9 (beam on): the corrected step's per-channel, per-facet term",
+                  "P0": "[Data.Prefetch == 0] * rows in one chunk * nchan, times 16e-9 (same unit as X3): the change in the peak when the next chunk is not prefetched (one chunk's buffers); negative = a saving, in every pass.  Hand-derived from the NGC 7541 A/B legs B'/P, section 13; not fitted by memplan-fit.py",
+                  "PS": "[Facets.PSFPass == separate] * sum over facets of NpixFacetPadded^2, times 16e-9 (same unit as X1a): the change in the FIRST pass's peak (the one that grids the PSF) when the PSF is gridded in a pass of its own; negative = a saving.  Steps that grid the PSF only (target, initial, corrected; not finalize).  Valid only at ddf.lowmem_fit.PSFOversize.  Hand-derived from legs B'/D, section 13",
+                  "PL": "[Facets.PSFPass == separate] * sum over facets of NpixFacetPadded^2, times 16e-9 (same unit as X1a): the peak of the LATER major cycles (no PSF machine, unchanged by PSFPass) relative to the joint first pass's peak.  With PSFPass separate the run's peak is the max of the first pass (PS) and the later cycles (PL), so the planner adds max(PS, PL).  Hand-derived from legs B'/D, section 13; same PSFOversize caveat",
                   "mode=SSD2": "1 for Deconv.Mode SSD2 (GB added)",
                   "mode=SSD3": "1 for Deconv.Mode SSD3 (GB added)",
                   "step=target": "1 for the ddfacet-target step, a Clean on grid facets (GB added; initial is the baseline)",
@@ -1014,7 +1134,44 @@ cabs:
                 },
                 "npoints": 217,
                 "underdetermined": false,
-                "dropped_terms": []
+                "dropped_terms": [],
+                "lowmem_fit": {
+                  "PSFOversize": 1.5,
+                  "legs": {
+                    "B'": "defaults",
+                    "P": "--Data-Prefetch 0",
+                    "D": "--Facets-PSFPass separate"
+                  },
+                  "source": "NGC 7541 A/B, DDFacet stack on the v0.16.15 image, corrected pass, 512 channels, NPix 3773, 3 bands, 64 antennas",
+                  "date": "2026-11-14",
+                  "geometry": {
+                    "pad_px2": 218771397,
+                    "chunk_rows": 453600,
+                    "nchan": 512,
+                    "x1a_unit_gb": 3.500342,
+                    "x3_unit_gb": 3.715891
+                  },
+                  "peak_rss_gb": {
+                    "B'": {
+                      "pass0": 55.67,
+                      "later_max": 50.26
+                    },
+                    "P": {
+                      "pass0": 52.59,
+                      "later_max": 47.98
+                    },
+                    "D": {
+                      "pass0": 45.32,
+                      "later_max": 49.24
+                    }
+                  },
+                  "derivation": {
+                    "PS": "-(55.67 - 45.32) / x1a_unit",
+                    "P0": "-(50.26 - 47.98) / x3_unit (the smallest saving of any pass: later-cycle max against later-cycle max; the first pass saved 3.08)",
+                    "PL": "(50.26 - 55.67) / x1a_unit"
+                  },
+                  "scope": "one geometry (one PSFOversize); not refitted by tools/memplan-fit.py, and a memplan-fit.py --write-model must carry this block and P0/PS/PL over"
+                }
               },
               "kms": {
                 "coefficients": {
@@ -1089,23 +1246,26 @@ cabs:
 
             best, tried, geoms = L.plan_ddf(model, GD, ms, ram_gb, margin=margin, step=step, mode=mode,
                                                    prefer=_opt("Prefer", "fidelity"),
-                                                   proxy_nodes=int(_opt("NDirections", 0)))
+                                                   proxy_nodes=int(_opt("NDirections", 0)),
+                                                   allow_lowmem=bool(_opt("AllowLowMemOptions", True)))
             nfac, pad2 = geoms[best["limit_step"] if best else sorted(geoms)[0]]
             for _st, (_n, _p) in geoms.items():
                 print("tessellation (%s): %d facets, sum padded px^2 %.4g" % (_st, _n, _p))
-            print("  %-10s %-8s %-6s %-11s %-10s %-10s %s" % ("ChunkHours", "ChanStep", "nchan", "rows/chunk",
-                                                             "peak GB", "x margin", "fits"))
+            print("  %-10s %-8s %-6s %-11s %-10s %-10s %-10s %s" % ("ChunkHours", "ChanStep", "nchan", "rows/chunk",
+                                                                   "peak GB", "x margin", "limit", "fits"))
             for e in tried:
                 if e["chan_step"] == 1 or (best and e["chan_step"] == best["chan_step"]):
-                    print("  %-10g %-8d %-6d %-11d %-10.1f %-10.1f %-10s %s" % (
+                    print("  %-10g %-8d %-6d %-11d %-10.1f %-10.1f %-10s %s%s" % (
                         e["chunk_hours"], e["chan_step"], e["nchan"], e["rows_chunk"], e["peak_gb"],
-                        e["planned_gb"], e["limit_step"], "yes" if e["fits"] else "no"))
+                        e["planned_gb"], e["limit_step"], "yes" if e["fits"] else "no",
+                        "" if not e["lowmem_rank"] else "   [Prefetch %d, PSFPass %s]" % (e["prefetch"], e["psfpass"])))
 
             Plan = _opt("PlanOut", "ddfacet-memory-plan.json")
             RamGBUsed = ram_gb
             NFacetsPlanned = int(nfac)
             if best is None:
                 NCPU, ChunkHours, ChanStep, PeakGB, PlannedGB, Flags = cores, 0.5, 1, 0.0, 0.0, ""
+                Prefetch, PSFPass = 1, "joint"
                 with open(Plan, "w") as _fh:
                     json.dump(dict(fits=False, ram_gb=ram_gb, margin=margin, nfacets=nfac, sum_pad2=pad2,
                                    notes=notes, tried=tried), _fh, indent=2)
@@ -1123,11 +1283,20 @@ cabs:
                          ChanStep - 1, ChanStep))
                 print(_w)
                 warnings.append(_w)
+            Prefetch, PSFPass = int(best["prefetch"]), str(best["psfpass"])
+            if best["lowmem_rank"]:
+                _w = ("low-memory option(s) chosen: %s (the default options at ChunkHours %g, ChanStep %d do not fit %.1f GB "
+                      "at margin x%g)" % (best["lowmem_why"], ChunkHours, ChanStep, ram_gb, margin))
+                print(_w)
+                notes.append(_w)
             Flags = " ".join((["--Selection-ChanStep %d" % ChanStep] if ChanStep != 1 else [])
-                             + ["--Parallel-NCPU %d" % NCPU, "--Data-ChunkHours %g" % ChunkHours])
+                             + ["--Parallel-NCPU %d" % NCPU, "--Data-ChunkHours %g" % ChunkHours]
+                             + (["--Data-Prefetch 0"] if Prefetch == 0 else [])
+                             + (["--Facets-PSFPass separate"] if PSFPass != "joint" else []))
             _, terms = L.ddf_peak(model, pad2, nfac, nband=int(GD["Freq"]["NBand"]), rows_chunk=best["rows_chunk"],
                                   nchan=best["nchan"], nant=ms["nant"], beam_nband=beam_nband, mode=mode,
-                                  step=best["limit_step"])
+                                  step=best["limit_step"], prefetch=Prefetch, psfpass=PSFPass,
+                                  psf_oversize=GD["Facets"].get("PSFOversize"))
             print("plan: %s   predicted peak %.1f GB, x%g = %.1f GB of %.1f GB"
                   % (Flags, PeakGB, margin, PlannedGB, ram_gb))
             with open(Plan, "w") as _fh:
@@ -1135,5 +1304,7 @@ cabs:
                                planned_gb=PlannedGB, margin=margin, ram_gb=ram_gb, ram_source=ram_source,
                                mode=mode, step=step, limit_step=best["limit_step"], by_step=best["by_step"],
                                nfacets=int(nfac), sum_pad2=pad2, terms=terms,
-                               model_fitted=model.get("fitted"), flags=Flags, notes=notes, warnings=warnings, tried=tried),
+                               model_fitted=model.get("fitted"), flags=Flags,
+                               allow_lowmem_options=bool(_opt("AllowLowMemOptions", True)), prefetch=Prefetch,
+                               psfpass=PSFPass, lowmem_why=best["lowmem_why"], notes=notes, warnings=warnings, tried=tried),
                           _fh, indent=2)
