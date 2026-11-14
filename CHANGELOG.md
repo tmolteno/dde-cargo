@@ -10,6 +10,42 @@ DDFacet's `CHANGES.md` and commit history, killMS's commit history, and
 
 ## [Unreleased]
 
+## [0.3.13] - 2026-11-15
+
+### Container images
+
+- DDFacet `ghcr.io/tmolteno/ddfacet:v0.16.15` → `v0.16.16`.
+- killMS `ghcr.io/tmolteno/killms:v3.15.18` → `v3.15.19`.
+- Image pins are those of the cabs synced from meerkat_imaging, equal to the latest upstream tags.
+
+### DDFacet
+
+#### `v0.16.16` (2026-11-15)
+- Smooth beam: station-independent FITS beam is stacked without the antenna axis (`6cdda96e`)
+- Store the spatial weight (SW) as its bounding box, both facet machines (`6f268794`)
+- Release the PSF machine's W planes once its grids are FFT'd (`717ebbf1`)
+- CHANGES: CF audit, SW box, PSF W release (`8ea59db1`)
+- Data.Prefetch: option to switch off chunk prefetch (one chunk's buffers less) (`5240a5dc`)
+- Facets-PSFPass: grid the PSF in its own pass, before the dirty pass (`cbd857f0`)
+- Facets-PSFPass separate: JonesNorm from the main machine, PSF cache after the dirty pass (`c4d2ca08`)
+
+### killMS
+
+#### `v3.15.19` (2026-11-15)
+- Rebuilt on DDFacet `v0.16.16`; no source changes.
+
+### Cab changes (meerkat_imaging)
+
+meerkat_imaging `a49448a` → `69692a9`:
+
+- Image pin updates only.
+
+### Packaging
+
+- Package version bumped from `0.3.12` to `0.3.13`.
+- Cabs and schemas synced from `meerkat_imaging/cabs` (`invoke sync`).
+- Changelog generated from the `../DDFacet` and `../killMS` commit history and meerkat_imaging's cab history.
+
 ## [0.3.12] - 2026-11-14
 
 ### Container images
@@ -731,7 +767,8 @@ meerkat_imaging `529047a` → `76ccf43`:
   plus the `ddfacet-memory-plan` and `killms-memory-plan` cabs.
 - PyPI trusted publishing (OIDC) on `vX.Y.Z` tags.
 
-[Unreleased]: https://github.com/tmolteno/dde-cargo/compare/v0.3.12...HEAD
+[Unreleased]: https://github.com/tmolteno/dde-cargo/compare/v0.3.13...HEAD
+[0.3.13]: https://github.com/tmolteno/dde-cargo/compare/v0.3.12...v0.3.13
 [0.3.12]: https://github.com/tmolteno/dde-cargo/compare/v0.3.11...v0.3.12
 [0.3.11]: https://github.com/tmolteno/dde-cargo/compare/v0.3.10...v0.3.11
 [0.3.10]: https://github.com/tmolteno/dde-cargo/compare/v0.3.9...v0.3.10
