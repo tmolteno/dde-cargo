@@ -30,7 +30,7 @@
 # skarabina --summary later grows a machine-readable per-antenna block, this cab can read it; the
 # score stays here either way (choosing a refant is pipeline policy, not flagging).
 #
-# The image is dde-cargo's vars.tim-molteno.images (the DDFacet image plan-uvmax runs its casacore
+# The image is dde-cargo's vars.tim-molteno.images (the DDFacet image plan-uvmax runs its casacure
 # code in) -- resolved through cabs/tcam-cabs.yml's (dde_cargo) include, so this file must be
 # included AFTER it.
 #

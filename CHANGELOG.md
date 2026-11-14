@@ -10,6 +10,42 @@ DDFacet's `CHANGES.md` and commit history, killMS's commit history, and
 
 ## [Unreleased]
 
+## [0.3.12] - 2026-11-14
+
+### Container images
+
+- DDFacet `ghcr.io/tmolteno/ddfacet:v0.16.14` → `v0.16.15`.
+- killMS `ghcr.io/tmolteno/killms:v3.15.17` → `v3.15.18`.
+- Image pins are those of the cabs synced from meerkat_imaging, equal to the latest upstream tags.
+
+### DDFacet
+
+#### `v0.16.15` (2026-11-14)
+- Validate per-chunk caches against the MS and on load (#111) (`53a61fde`)
+- ReadMSInfo reads the selected SPW's CHAN_FREQ/CHAN_WIDTH row, not the whole column; casacure >= 3.8.41 (`b613f43b`)
+- alternate-data-backends: dask-ms[xarray] -> dask-ms-2[xarray] (#115) (`8f004b00`)
+- Fix the zarr PutVisColumn dtype: complex visibilities lost their imaginary part (`d445bb42`)
+- Fall back to an MS's only field when the --Selection-Field default has no rows (`13e4d9bb`)
+- Krigging: interpolate the killMS solutions in Python, kernels see only Nearest (#128) (`7edc8b50`)
+
+### killMS
+
+#### `v3.15.18` (2026-11-14)
+- Read the selected SPW's CHAN_FREQ/CHAN_WIDTH row, not the whole column; casacure >= 3.8.41 (`b7d7500`)
+
+### Cab changes (meerkat_imaging)
+
+meerkat_imaging `dd01095` → `a49448a`:
+
+- memplan_lib, pick_reference_ant and its test: casacure instead of python-casacore (#24) (`a9db42a`)
+- memplan_lib and tools: read CHAN_FREQ/CHAN_WIDTH per row (getcell), not whole-table getcol (#24) (`912cdfb`)
+
+### Packaging
+
+- Package version bumped from `0.3.11` to `0.3.12`.
+- Cabs and schemas synced from `meerkat_imaging/cabs` (`invoke sync`).
+- Changelog generated from the `../DDFacet` and `../killMS` commit history and meerkat_imaging's cab history.
+
 ## [0.3.11] - 2026-11-14
 
 ### Container images
@@ -695,7 +731,8 @@ meerkat_imaging `529047a` → `76ccf43`:
   plus the `ddfacet-memory-plan` and `killms-memory-plan` cabs.
 - PyPI trusted publishing (OIDC) on `vX.Y.Z` tags.
 
-[Unreleased]: https://github.com/tmolteno/dde-cargo/compare/v0.3.11...HEAD
+[Unreleased]: https://github.com/tmolteno/dde-cargo/compare/v0.3.12...HEAD
+[0.3.12]: https://github.com/tmolteno/dde-cargo/compare/v0.3.11...v0.3.12
 [0.3.11]: https://github.com/tmolteno/dde-cargo/compare/v0.3.10...v0.3.11
 [0.3.10]: https://github.com/tmolteno/dde-cargo/compare/v0.3.9...v0.3.10
 [0.3.9]: https://github.com/tmolteno/dde-cargo/compare/v0.3.8...v0.3.9

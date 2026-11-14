@@ -90,7 +90,7 @@ vars:
       registry: ghcr.io/tmolteno
       name: ddfacet
       # The planner runs DDFacet's tessellation, so pin it to the imaging pin (tools/check-pins.py).
-      version: v0.16.14
+      version: v0.16.15
 
 cabs:
     ddfacet-memory-plan:
@@ -265,7 +265,7 @@ cabs:
             --write-model`, so a refit only regenerates that file.  Design and data: research/MEMORY_PLAN_CALIBRATION.md.
 
             The DDFacet part needs the DDFacet image (it runs DDFacet's own tessellation); the kMS part needs only numpy and
-            casacore.  Nothing here reads visibilities: the MS is read for its row/time/channel/antenna counts and phase centre.
+            casacure.  Nothing here reads visibilities: the MS is read for its row/time/channel/antenna counts and phase centre.
             """
             import contextlib
             import io
@@ -335,7 +335,7 @@ cabs:
             def ms_info(ms, field=0, ddid=0):
                 """What the models need from an MS, read from the tables (no visibilities): rows, TIME column, channels,
                 antennas and the field's phase centre."""
-                from casacore.tables import table
+                from casacure.tables import table
                 t = table(ms, ack=False, readonly=True)
                 try:
                     fid, did = t.getcol("FIELD_ID"), t.getcol("DATA_DESC_ID")
@@ -346,7 +346,7 @@ cabs:
                     t.close()
                 spw_id = int(table(ms + "::DATA_DESCRIPTION", ack=False).getcol("SPECTRAL_WINDOW_ID")[ddid])
                 spw = table(ms + "::SPECTRAL_WINDOW", ack=False)
-                nchan = int(len(spw.getcol("CHAN_FREQ")[spw_id]))
+                nchan = int(len(spw.getcell("CHAN_FREQ", spw_id)))
                 spw.close()
                 na = table(ms + "::ANTENNA", ack=False)
                 nant = na.nrows()
@@ -375,7 +375,7 @@ cabs:
             def ms_w_fmax(ms, field=None, block=1000000):
                 """(max |w| in metres, top channel frequency in Hz) of an MS: what killMS sizes its W-kernels from (ClassImageSM2 takes wmax =
                 max |w| of the UVW column, all rows; the kernels' support follows the shortest wavelength).  field=None: every row."""
-                from casacore.tables import table
+                from casacure.tables import table
                 t = table(ms, ack=False, readonly=True)
                 try:
                     wmax = 0.0
@@ -389,7 +389,8 @@ cabs:
                 finally:
                     t.close()
                 spw = table(ms + "::SPECTRAL_WINDOW", ack=False)
-                fmax = float(np.max(spw.getcol("CHAN_FREQ")))
+                # per-row reads: a whole-table getcol of a ragged CHAN_FREQ (SPWs of different widths) raises on casacure >= 3.8.41
+                fmax = max(float(np.max(spw.getcell("CHAN_FREQ", i))) for i in range(spw.nrows()))
                 spw.close()
                 return wmax, fmax
 
@@ -398,10 +399,10 @@ cabs:
                 """The frequencies the kMS predict renders the model at: the mean channel frequency of each of `nbands` (NChanSols: kMS.py
                 sets Freq.NDegridBand from it) contiguous groups of the MS's channels (DDFacet ClassVisServer's degrid bands).  Only which
                 model pixels are > 0 depends on them (dico_facet_stats), so a group boundary a channel off does not matter."""
-                from casacore.tables import table
+                from casacure.tables import table
                 spw_id = int(table(ms + "::DATA_DESCRIPTION", ack=False).getcol("SPECTRAL_WINDOW_ID")[ddid])
                 spw = table(ms + "::SPECTRAL_WINDOW", ack=False)
-                ch = np.asarray(spw.getcol("CHAN_FREQ")[spw_id], dtype=float)
+                ch = np.asarray(spw.getcell("CHAN_FREQ", spw_id), dtype=float)
                 spw.close()
                 return np.array([c.mean() for c in np.array_split(np.sort(ch), max(1, min(int(nbands), ch.size)))])
 
