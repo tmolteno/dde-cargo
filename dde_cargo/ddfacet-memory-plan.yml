@@ -90,6 +90,10 @@
 # grids the PSF and is only counted at the PSFOversize it was measured at (1.5); at another one the plan does not use it.  Search
 # order: at each ChunkHours, largest first, the default options, then PSFPass
 # separate, then Prefetch 0, then both; ChunkHours is shrunk only when none of those fits, and ChanStep raised only after that.
+# DegridGroup (DDFacet#148, after v0.16.16): the degrid builds and frees the model grids in groups of K facets (at most 2K alive) instead
+# of caching one per flux facet for the whole major cycle, so the later cycles stop growing.  The plan reads K from the image's own parset
+# (Facets.DegridGroup; absent in v0.16.16 = 0, so today's plans are unchanged; 16 in a release with #148) or from the DegridGroup input,
+# and then predicts the later cycles at PLG + the 2K-grid cache instead of PL (memplan-model.json, section 13 / 14 of the calibration).
 # Prefer speed uses the options only to keep the largest chunk at the smallest ChanStep (they cost wall time).  The outputs
 # Prefetch (1) and PSFPass (joint) are the defaults unless chosen, and are added to Flags only when non-default; recipes wire
 # them as UNSET unless non-default, so the DDF command line is unchanged when the option is off (see white-belt-4-ddfacet.yml).
@@ -103,7 +107,7 @@ vars:
       registry: ghcr.io/tmolteno
       name: ddfacet
       # The planner runs DDFacet's tessellation, so pin it to the imaging pin (tools/check-pins.py).
-      version: v0.16.16
+      version: v0.16.17
 
 cabs:
     ddfacet-memory-plan:
@@ -207,6 +211,15 @@ cabs:
                 info: >
                     worker count you would like; also the cap.  Default: the usable cores (the CPU affinity set, so a
                     taskset/cpuset is respected)
+            DegridGroup:
+                dtype: int
+                required: false
+                info: >
+                    the --Facets-DegridGroup the DDFacet step will run with (DDFacet#148: the degrid builds and frees the
+                    model grids in groups of this many facets, at most 2x alive, so the later major cycles stop growing; 0 =
+                    cache every flux facet's grid).  Unset (the default): the image's own default, read from its parset
+                    (v0.16.16 has no such option, so 0 and the plan is unchanged; a release with #148 defaults to 16).  Only the
+                    prediction uses it, the plan emits no flag for it
             Margin:
                 dtype: float
                 default: 1.25
@@ -563,8 +576,40 @@ cabs:
                     return False
 
 
+            def degrid_group(GD=None, explicit=None):
+                """K, the --Facets-DegridGroup the DDFacet run will use (DDFacet#148: the degrid builds and frees the model grids in groups of K
+                facets, at most 2K alive; 0 = cache every flux facet's grid for the whole major cycle).  `explicit` (a value the step passes) wins;
+                else the GD's Facets.DegridGroup, which is the DDFacet image's own default (the planner runs inside the image it plans for);
+                an image without the option (v0.16.16 and older) has no such key, so K = 0 and the plan is the one it always was.
+                Unreadable or negative: 0 (no claimed saving)."""
+                v = explicit
+                if v is None:
+                    v = ((GD or {}).get("Facets") or {}).get("DegridGroup")
+                try:
+                    return max(0, int(float(v)))
+                except (TypeError, ValueError):
+                    return 0
+
+
+            def degrid_nbands(GD, nchan):
+                """NDegridBand the run will use: Freq.NDegridBand, or one per selected channel when it is 0 (DDFacet's meaning; a DegridBandMHz
+                step is taken as the per-channel upper bound).  Never more than the selected channels."""
+                n = int(((GD or {}).get("Freq") or {}).get("NDegridBand") or 0)
+                return max(1, min(n, int(nchan)) if n > 0 else int(nchan))
+
+
+            def degrid_cache_gb(pad2, nfacets, ndegrid, k):
+                """The model-grid cache of the grouped degrid, GB: at most min(2K, nfacets) grids alive, each NDegridBand * NpixFacetPadded^2 * 8 B
+                (complex64) for a MEAN facet (pad2 / nfacets).  Mean, not largest: which facets carry flux is unknown to the planner, and at
+                NGC 7541 cycle 0 the flux facets were 1.08x the mean (120 MB against 111 MB; the largest facet is 1.59x); the 1.25 margin covers
+                that spread, and the PLG fit is conservative (it takes the leg with the larger residual)."""
+                if k <= 0 or nfacets <= 0:
+                    return 0.0
+                return min(2 * int(k), int(nfacets)) * int(ndegrid) * 8.0 * (pad2 / nfacets) * 1e-9
+
+
             def ddf_peak(model, pad2, nfacets, nband, rows_chunk, nchan, nant, beam_nband, mode="HMP", step="initial",
-                         prefetch=1, psfpass="joint", psf_oversize=None):
+                         prefetch=1, psfpass="joint", psf_oversize=None, degrid_group=0, ndegrid=None):
                 """Predicted max RSS of DDF.py, GB (1e9 B), and the per-term breakdown (model form D, design section 6).
                 step: target (the ddfacet-target Clean on grid facets), initial (baseline), finalize or corrected.
                 prefetch / psfpass: DDFacet's --Data-Prefetch (1 = default) and --Facets-PSFPass (joint = default), DDFacet#145 / #146.
@@ -574,7 +619,11 @@ cabs:
                 relative to the joint first pass).  The run's peak is the max of the two, so the term added is max(PS, PL) * pad2 * 16e-9 (key
                 PS or PL, whichever binds).  Only the steps that grid the PSF (PSF_STEPS; finalize loads it from the cache) get it, only at
                 the PSFOversize the coefficients were measured at (psf_fit_applies), and only if the model has all of PS, PL.  A
-                coefficient the model does not carry, or a case it does not cover, changes nothing (never a claimed saving)."""
+                coefficient the model does not carry, or a case it does not cover, changes nothing (never a claimed saving).
+                degrid_group (K, --Facets-DegridGroup, DDFacet#148) / ndegrid (NDegridBand): the later cycles' peak is then not PL (which includes
+                the cache of every flux facet's model grid, at most all of them) but PLG * pad2 * 16e-9 (the later cycles without that cache) plus
+                degrid_cache_gb (at most 2K grids alive), and never more than PL.  Needs PLG in the model and ndegrid; K = 0 is the PL case.
+                The grouping changes the later cycles only: the first pass (PS) and the joint case are untouched."""
                 c = model["ddf"]["coefficients"]
                 x1 = pad2 * 16e-9
                 terms = {"a": c["a"],
@@ -588,8 +637,18 @@ cabs:
                     terms["P0"] = c["P0"] * rows_chunk * nchan * 16e-9
                 if (psfpass == "separate" and step in PSF_STEPS and c.get("PS", 0.0) and "PL" in c
                         and psf_fit_applies(model, psf_oversize)):
-                    key, coef = ("PS", c["PS"]) if c["PS"] >= c["PL"] else ("PL", c["PL"])
-                    terms[key] = coef * x1
+                    first, later, lkey = c["PS"] * x1, c["PL"] * x1, "PL"
+                    if degrid_group and ndegrid and "PLG" in c:
+                        grouped = c["PLG"] * x1 + degrid_cache_gb(pad2, nfacets, ndegrid, degrid_group)
+                        if grouped < later:
+                            later, lkey = grouped, "PLG"
+                    if first >= later:
+                        terms["PS"] = first
+                    elif lkey == "PLG":
+                        terms["PLG"] = c["PLG"] * x1
+                        terms["DG"] = later - c["PLG"] * x1                   # the model-grid cache of the grouped degrid
+                    else:
+                        terms["PL"] = later
                 m = (mode or "HMP").upper()
                 if m in ("SSD2", "SSD3"):
                     terms["mode=" + m] = c.get("mode=" + m, 0.0)
@@ -969,7 +1028,7 @@ cabs:
 
             def plan_ddf(model, GD, ms, ram_gb, margin=1.25, step="initial", mode=None,
                          chunk_choices=(4.0, 2.0, 1.0, 0.5), prefer="fidelity", chan_steps=(1, 2, 3, 4, 5, 6, 8, 10, 16, 20),
-                         proxy_nodes=0, kms=None, allow_lowmem=False):
+                         proxy_nodes=0, kms=None, allow_lowmem=False, degridgroup=None):
                 """Search ChunkHours x ChanStep for the largest ChunkHours whose predicted peak x margin fits ram_gb.
 
                 step: target | initial | finalize | corrected, or "clustered" = the largest of initial / finalize / corrected
@@ -994,7 +1053,9 @@ cabs:
                 largest ChunkHours at the smallest ChanStep, and AT THAT CHUNK the first option set in that order that fits -- so the options are
                 tried before ChunkHours is shrunk, and ChunkHours before ChanStep is raised.  Speed preference: the largest chunk, then
                 the smallest ChanStep at it, then the first option set; the options only keep the largest chunk from costing band, they are not
-                used to avoid a shrink of the chunk (the options cost wall time).  Each entry carries prefetch, psfpass, and lowmem_why."""
+                used to avoid a shrink of the chunk (the options cost wall time).  Each entry carries prefetch, psfpass, and lowmem_why.
+                degridgroup: the --Facets-DegridGroup the step passes (None: the GD's own Facets.DegridGroup, i.e. the image's default, absent = 0);
+                see degrid_group and ddf_peak.  Each entry carries degrid_group."""
                 import copy
                 steps = CLUSTERED if step == "clustered" else (step,)
                 geoms, pads_by = {}, {}
@@ -1026,6 +1087,7 @@ cabs:
                                       cf_gb=cf_gb)[0]
                 option_sets = lowmem_options(model, GD, allow_lowmem, steps=steps)
                 psf_os = (GD.get("Facets") or {}).get("PSFOversize")
+                dgk = degrid_group(GD, degridgroup)
                 feasible, allp = [], []
                 for cs in chan_steps:
                     nch = nchan_selected(ms["nchan"], sel.get("ChanStart"), sel.get("ChanEnd"), cs)
@@ -1033,7 +1095,8 @@ cabs:
                         rows = chunk_rows(ms["times"], ch)
                         for rank, (pre, psf, why) in enumerate(option_sets):
                             per = {st: ddf_peak(model, geoms[st][1], geoms[st][0], rows_chunk=rows, nchan=nch, step=st,
-                                                prefetch=pre, psfpass=psf, psf_oversize=psf_os, **base)[0]
+                                                prefetch=pre, psfpass=psf, psf_oversize=psf_os,
+                                                degrid_group=dgk, ndegrid=degrid_nbands(GD, nch), **base)[0]
                                    for st in steps}
                             if kms_gb is not None:
                                 per["kms"] = kms_gb
@@ -1042,7 +1105,7 @@ cabs:
                             e = dict(chunk_hours=ch, chan_step=cs, nchan=nch, rows_chunk=rows, peak_gb=peak, kms_tchunk=kms_tchunk,
                                      planned_gb=peak * margin, fits=bool(peak * margin <= ram_gb), limit_step=lim,
                                      by_step={k: round(v, 3) for k, v in per.items()},
-                                     prefetch=pre, psfpass=psf, lowmem_rank=rank, lowmem_why=why)
+                                     prefetch=pre, psfpass=psf, lowmem_rank=rank, lowmem_why=why, degrid_group=dgk)
                             allp.append(e)
                             if e["fits"]:
                                 feasible.append(e)
@@ -1108,8 +1171,9 @@ cabs:
                   "X4b": 1153.5725630276554,
                   "X4c": 439.3465588376699,
                   "P0": -0.6135809358465611,
-                  "PS": -2.95685363292716,
-                  "PL": -1.5455631066798017,
+                  "PS": -2.89685950124458,
+                  "PL": -1.4941395652375902,
+                  "PLG": -4.891982616369191,
                   "mode=SSD2": 7.440557301556507,
                   "mode=SSD3": 5.124512257042504,
                   "step=target": 5.036426414047182,
@@ -1124,8 +1188,9 @@ cabs:
                   "X4b": "Beam.NBand * NA * nfacets, times 8e-9: beam Jones cubes, one per beam band (no channel axis); 0 with the beam off",
                   "X4c": "[step == corrected] * NA * nfacets * nchan, times 8e-9 (beam on): the corrected step's per-channel, per-facet term",
                   "P0": "[Data.Prefetch == 0] * rows in one chunk * nchan, times 16e-9 (same unit as X3): the change in the peak when the next chunk is not prefetched (one chunk's buffers); negative = a saving, in every pass.  Hand-derived from the NGC 7541 A/B legs B'/P, section 13; not fitted by memplan-fit.py",
-                  "PS": "[Facets.PSFPass == separate] * sum over facets of NpixFacetPadded^2, times 16e-9 (same unit as X1a): the change in the FIRST pass's peak (the one that grids the PSF) when the PSF is gridded in a pass of its own; negative = a saving.  Steps that grid the PSF only (target, initial, corrected; not finalize).  Valid only at ddf.lowmem_fit.PSFOversize.  Hand-derived from legs B'/D, section 13",
-                  "PL": "[Facets.PSFPass == separate] * sum over facets of NpixFacetPadded^2, times 16e-9 (same unit as X1a): the peak of the LATER major cycles (no PSF machine, unchanged by PSFPass) relative to the joint first pass's peak.  With PSFPass separate the run's peak is the max of the first pass (PS) and the later cycles (PL), so the planner adds max(PS, PL).  Hand-derived from legs B'/D, section 13; same PSFOversize caveat",
+                  "PS": "[Facets.PSFPass == separate] * sum over facets of NpixFacetPadded^2, times 16e-9 (same unit as X1a): the change in the FIRST pass's peak (the one that grids the PSF) when the PSF is gridded in a pass of its own; negative = a saving.  Steps that grid the PSF only (target, initial, corrected; not finalize).  Valid only at ddf.lowmem_fit.PSFOversize.  Hand-derived from legs B'/D and G16/G8 (first-pass max), section 13",
+                  "PL": "[Facets.PSFPass == separate] * sum over facets of NpixFacetPadded^2, times 16e-9 (same unit as X1a): the peak of the LATER major cycles, with NO model-grid grouping (Facets.DegridGroup 0, every flux facet's grid cached for the major cycle), relative to the joint first pass's peak.  With PSFPass separate the run's peak is the max of the first pass (PS) and the later cycles (PL, or PLG with grouping), so the planner adds the larger.  Hand-derived from legs B'/D/R, section 13; same PSFOversize caveat",
+                  "PLG": "[Facets.PSFPass == separate and Facets.DegridGroup K > 0] * sum over facets of NpixFacetPadded^2, times 16e-9 (X1a unit): the later major cycles' peak WITHOUT the model-grid cache, relative to the joint first pass.  The cache with grouping is added on top, physically: min(2K, nfacets) * (NDegridBand * 8 B * sum(pad^2)/nfacets) (at most 2K grids alive, one mean-sized grid each), and the later-cycle peak is capped at PL (never above the ungrouped one).  Used only when the DDFacet in use has Facets.DegridGroup (DDFacet#148, after v0.16.16).  Hand-derived from legs G8/G16, section 13 / 14",
                   "mode=SSD2": "1 for Deconv.Mode SSD2 (GB added)",
                   "mode=SSD3": "1 for Deconv.Mode SSD3 (GB added)",
                   "step=target": "1 for the ddfacet-target step, a Clean on grid facets (GB added; initial is the baseline)",
@@ -1140,7 +1205,10 @@ cabs:
                   "legs": {
                     "B'": "defaults",
                     "P": "--Data-Prefetch 0",
-                    "D": "--Facets-PSFPass separate"
+                    "D": "--Facets-PSFPass separate",
+                    "R": "--Facets-PSFPass separate, --Facets-DegridGroup 0 (v0.16.16 + DDFacet#148 files, 8b67ae0a)",
+                    "G16": "--Facets-PSFPass separate --Facets-DegridGroup 16",
+                    "G8": "--Facets-PSFPass separate --Facets-DegridGroup 8"
                   },
                   "source": "NGC 7541 A/B, DDFacet stack on the v0.16.15 image, corrected pass, 512 channels, NPix 3773, 3 bands, 64 antennas",
                   "date": "2026-11-14",
@@ -1163,14 +1231,72 @@ cabs:
                     "D": {
                       "pass0": 45.32,
                       "later_max": 49.24
+                    },
+                    "R": {
+                      "pass0": 42.76,
+                      "later_max": 50.44
+                    },
+                    "G16": {
+                      "pass0": 45.49,
+                      "later_max": 40.67
+                    },
+                    "G8": {
+                      "pass0": 45.53,
+                      "later_max": 40.33
                     }
                   },
                   "derivation": {
-                    "PS": "-(55.67 - 45.32) / x1a_unit",
+                    "PS": "-(55.67 - 45.53) / x1a_unit (45.53 = the highest separate first pass measured: D 45.32, R 42.76, G16 45.49, G8 45.53; never below a measurement)",
                     "P0": "-(50.26 - 47.98) / x3_unit (the smallest saving of any pass: later-cycle max against later-cycle max; the first pass saved 3.08)",
-                    "PL": "(50.26 - 55.67) / x1a_unit"
+                    "PL": "(50.44 - 55.67) / x1a_unit (50.44 = the highest ungrouped later-cycle max: B' 50.26, D 49.24, R 50.44)",
+                    "PLG": "(LB - 55.67) / x1a_unit, LB = max(40.67 - cache(K=16), 40.33 - cache(K=8)) = 40.33 - 1.7836 = 38.546; cache(K) = min(2K, 157) * 10 * 8 * 218771397/157 * 1e-9 GB (1.7836 at K=8, 3.5672 at K=16)"
                   },
-                  "scope": "one geometry (one PSFOversize); not refitted by tools/memplan-fit.py, and a memplan-fit.py --write-model must carry this block and P0/PS/PL over"
+                  "scope": "one geometry (one PSFOversize); not refitted by tools/memplan-fit.py, and a memplan-fit.py --write-model must carry this block and P0/PS/PL/PLG over",
+                  "degridgroup": {
+                    "source": "NGC 7541 A/B of DDFacet#148 on spark, 512-channel corrected pass, --Facets-PSFPass separate, 157 facets, 5 chunks of 453600 rows, ndegrid 10, 5 major cycles after the first pass; image ghcr.io/tmolteno/ddfacet:v0.16.16 with the non-test files of PR 8b67ae0a mounted over it (overlay: ClassBeamMean, ClassJones, ClassDeconvMachine, ClassFacetMachine, CacheManager, ddfacet_stimela_inputs_schema.yaml, DefaultParset.cfg)",
+                    "date": "2026-11-15/16",
+                    "DegridGroup_default_in_master": 16,
+                    "peak_rss_gb": {
+                      "R (K=0)": {
+                        "first": 42.76,
+                        "cycles": [
+                          39.77,
+                          48.69,
+                          47.97,
+                          49.19,
+                          50.44
+                        ]
+                      },
+                      "G16": {
+                        "first": 45.49,
+                        "cycles": [
+                          36.49,
+                          40.67,
+                          39.11,
+                          39.78,
+                          38.56
+                        ]
+                      },
+                      "G8": {
+                        "first": 45.53,
+                        "cycles": [
+                          36.77,
+                          40.33,
+                          38.31,
+                          38.02,
+                          36.26
+                        ]
+                      }
+                    },
+                    "peak_grids_alive": {
+                      "K=16": 32,
+                      "K=8": 16,
+                      "note": "exactly 2K in every pass"
+                    },
+                    "cache_term": "min(2K, nfacets) * NDegridBand * 8 * mean(pad^2) * 1e-9 GB (the mean facet; flux facets were 1.08x the mean at cycle 0 of the census, DDFacet#147)",
+                    "implied_K0_cache_gb": 11.89,
+                    "all_facet_bound_gb": 17.5
+                  }
                 }
               },
               "kms": {
@@ -1247,7 +1373,8 @@ cabs:
             best, tried, geoms = L.plan_ddf(model, GD, ms, ram_gb, margin=margin, step=step, mode=mode,
                                                    prefer=_opt("Prefer", "fidelity"),
                                                    proxy_nodes=int(_opt("NDirections", 0)),
-                                                   allow_lowmem=bool(_opt("AllowLowMemOptions", True)))
+                                                   allow_lowmem=bool(_opt("AllowLowMemOptions", True)),
+                                                   degridgroup=_opt("DegridGroup"))
             nfac, pad2 = geoms[best["limit_step"] if best else sorted(geoms)[0]]
             for _st, (_n, _p) in geoms.items():
                 print("tessellation (%s): %d facets, sum padded px^2 %.4g" % (_st, _n, _p))
@@ -1296,7 +1423,8 @@ cabs:
             _, terms = L.ddf_peak(model, pad2, nfac, nband=int(GD["Freq"]["NBand"]), rows_chunk=best["rows_chunk"],
                                   nchan=best["nchan"], nant=ms["nant"], beam_nband=beam_nband, mode=mode,
                                   step=best["limit_step"], prefetch=Prefetch, psfpass=PSFPass,
-                                  psf_oversize=GD["Facets"].get("PSFOversize"))
+                                  psf_oversize=GD["Facets"].get("PSFOversize"), degrid_group=best["degrid_group"],
+                                  ndegrid=L.degrid_nbands(GD, best["nchan"]))
             print("plan: %s   predicted peak %.1f GB, x%g = %.1f GB of %.1f GB"
                   % (Flags, PeakGB, margin, PlannedGB, ram_gb))
             with open(Plan, "w") as _fh:
@@ -1306,5 +1434,5 @@ cabs:
                                nfacets=int(nfac), sum_pad2=pad2, terms=terms,
                                model_fitted=model.get("fitted"), flags=Flags,
                                allow_lowmem_options=bool(_opt("AllowLowMemOptions", True)), prefetch=Prefetch,
-                               psfpass=PSFPass, lowmem_why=best["lowmem_why"], notes=notes, warnings=warnings, tried=tried),
+                               psfpass=PSFPass, degrid_group=best["degrid_group"], lowmem_why=best["lowmem_why"], notes=notes, warnings=warnings, tried=tried),
                           _fh, indent=2)
