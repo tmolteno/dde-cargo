@@ -98,8 +98,8 @@
 # first pass's PSF half (its peak) is predicted at the Prefetch 0 level (P0F).  No parset key: the planner probes the image (ClassVisServer
 # defines prefetchDisabled), so older images keep their plans; the plan JSON records psf_prefetch_off.
 # Prefer speed uses the options only to keep the largest chunk at the smallest ChanStep (they cost wall time).  The outputs
-# Prefetch (1) and PSFPass (joint) are the defaults unless chosen, and are added to Flags only when non-default; recipes wire
-# them as UNSET unless non-default, so the DDF command line is unchanged when the option is off (see white-belt-4-ddfacet.yml).
+# Prefetch (1) and PSFPass (joint) are the defaults unless chosen, and are added to Flags only when non-default; recipes pass
+# them always (DDFacet's own defaults when off; not IF(steps..., UNSET), which fails validation -- see white-belt-4-ddfacet.yml).
 #
 # History: v0.10 vendored the package cab; v0.12 added the threaded (flat-NCPU) planning of 2026-09-27; the model
 # was recalibrated on 2026-10-18 and moved here, out of DDFacet.
@@ -261,13 +261,13 @@ cabs:
             Prefetch:
                 dtype: int
                 info: >
-                    --Data-Prefetch: 1 (DDFacet's default) unless the plan chose 0; wire it only when it is 0
-                    (white-belt-4-ddfacet.yml does), as the pinned DDFacet does not accept the flag
+                    --Data-Prefetch: 1 (DDFacet's default) unless the plan chose 0; white-belt-4-ddfacet.yml passes it
+                    always, as Data.Prefetch = (Prefetch != 0)
             PSFPass:
                 dtype: str
                 info: >
-                    --Facets-PSFPass: joint (DDFacet's default) unless the plan chose separate; wire it only when it is
-                    separate, as the pinned DDFacet does not accept the flag
+                    --Facets-PSFPass: joint (DDFacet's default) unless the plan chose separate; white-belt-4-ddfacet.yml
+                    passes it always
             PeakGB:
                 dtype: float
                 info: predicted max RSS of the DDF.py process at those settings, GB (1e9 B), without Margin

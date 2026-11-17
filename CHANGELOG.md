@@ -10,6 +10,45 @@ DDFacet's `CHANGES.md` and commit history, killMS's commit history, and
 
 ## [Unreleased]
 
+## [0.3.19] - 2026-11-18
+
+### Container images
+
+- DDFacet `ghcr.io/tmolteno/ddfacet:v0.16.19` → `v0.16.19`.
+- killMS `ghcr.io/tmolteno/killms:v3.15.22` → `v3.15.23`.
+- Image pins are those of the cabs synced from meerkat_imaging, equal to the latest upstream tags.
+
+### DDFacet
+
+- Unchanged at `v0.16.19`.
+
+### killMS
+
+#### `v3.15.23` (2026-11-18)
+- BDA degrid map: build with numpy and share one cache across predictors and threads (#52) (`245bd96`)
+- Clear GLIBC_TUNABLES in the image: DDFacet#133's fixed mmap threshold stalls the in-process solve (#52) (`c69ba01`)
+- Solver task: no flags_image on the native path, uvw finiteness once per interval, Evolve0 from the live arrays (#52) (`8ce21db`)
+- One GIL-free native call for a Scalar KAFCA task: data, zero-kernel flagging, setDataAllFlagged and the EKF step (#52) (`dd1243c`)
+- Stall watchdog that needs no GIL: faulthandler dump while the collector waits; the unbounded waits report (#52) (`eee2fc2`)
+- IntervalPredict: predict each chunk straight into the interval kernel's row slice (#52) (`332ba0d`)
+- IntervalPredict.fill_antenna: gather and conjugate in Rust with the GIL released (#52) (`66695c9`)
+- FacetSet: cache the facet grid and CF pointers at construction instead of borrowing them per call (#52) (`8fa99eb`)
+- TestNativeScalarKafcaTask: time the GIL-release check over back-to-back tasks (one task was 0.0498 s on spark, under the 0.05 s floor) (`6d706d1`)
+- predictKernelImage: write the output without a rust-numpy borrow, so threads can fill different chunks of one K (#52) (`5740be2`)
+- jacobian tests: size the rayon pool with with_pool_threads, not RAYON_NUM_THREADS (parallel tests raced on the variable) (`2809370`)
+
+### Cab changes (meerkat_imaging)
+
+meerkat_imaging `6204d3d` → `6423a22`:
+
+- white-belt-4: always pass the planner's Prefetch/PSFPass to the DDF steps (`425ef57`)
+
+### Packaging
+
+- Package version bumped from `0.3.18` to `0.3.19`.
+- Cabs and schemas synced from `meerkat_imaging/cabs` (`invoke sync`).
+- Changelog generated from the `../DDFacet` and `../killMS` commit history and meerkat_imaging's cab history.
+
 ## [0.3.18] - 2026-11-17
 
 ### Container images
@@ -920,7 +959,8 @@ meerkat_imaging `529047a` → `76ccf43`:
   plus the `ddfacet-memory-plan` and `killms-memory-plan` cabs.
 - PyPI trusted publishing (OIDC) on `vX.Y.Z` tags.
 
-[Unreleased]: https://github.com/tmolteno/dde-cargo/compare/v0.3.18...HEAD
+[Unreleased]: https://github.com/tmolteno/dde-cargo/compare/v0.3.19...HEAD
+[0.3.19]: https://github.com/tmolteno/dde-cargo/compare/v0.3.18...v0.3.19
 [0.3.18]: https://github.com/tmolteno/dde-cargo/compare/v0.3.17...v0.3.18
 [0.3.17]: https://github.com/tmolteno/dde-cargo/compare/v0.3.16...v0.3.17
 [0.3.16]: https://github.com/tmolteno/dde-cargo/compare/v0.3.15...v0.3.16
