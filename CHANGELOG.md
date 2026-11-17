@@ -10,6 +10,38 @@ DDFacet's `CHANGES.md` and commit history, killMS's commit history, and
 
 ## [Unreleased]
 
+## [0.3.18] - 2026-11-17
+
+### Container images
+
+- DDFacet `ghcr.io/tmolteno/ddfacet:v0.16.18` → `v0.16.19`.
+- killMS `ghcr.io/tmolteno/killms:v3.15.21` → `v3.15.22`.
+- Image pins are those of the cabs synced from meerkat_imaging, equal to the latest upstream tags.
+
+### DDFacet
+
+#### `v0.16.19` (2026-11-17)
+- lock: dask-ms-2 0.2.37 (FastUnitTests unchanged vs 0.2.36 — same 7 local-runner failures on both) (`eb26604d`)
+- lock: security bump — certifi 2026.10.23 (Dependabot critical) (`a89ea848`)
+- PSFPass separate: run the PSF pass with prefetch off, restore --Data-Prefetch for the dirty pass (#151) (`65c3bdac`)
+
+### killMS
+
+#### `v3.15.22` (2026-11-17)
+- lock: security bump — certifi 2026.10.23 (Dependabot critical) (`e8b2460`)
+
+### Cab changes (meerkat_imaging)
+
+meerkat_imaging `7fb48f1` → `6204d3d`:
+
+- Image pin updates only.
+
+### Packaging
+
+- Package version bumped from `0.3.17` to `0.3.18`.
+- Cabs and schemas synced from `meerkat_imaging/cabs` (`invoke sync`).
+- Changelog generated from the `../DDFacet` and `../killMS` commit history and meerkat_imaging's cab history.
+
 ## [0.3.17] - 2026-11-17
 
 ### Container images
@@ -888,7 +920,8 @@ meerkat_imaging `529047a` → `76ccf43`:
   plus the `ddfacet-memory-plan` and `killms-memory-plan` cabs.
 - PyPI trusted publishing (OIDC) on `vX.Y.Z` tags.
 
-[Unreleased]: https://github.com/tmolteno/dde-cargo/compare/v0.3.17...HEAD
+[Unreleased]: https://github.com/tmolteno/dde-cargo/compare/v0.3.18...HEAD
+[0.3.18]: https://github.com/tmolteno/dde-cargo/compare/v0.3.17...v0.3.18
 [0.3.17]: https://github.com/tmolteno/dde-cargo/compare/v0.3.16...v0.3.17
 [0.3.16]: https://github.com/tmolteno/dde-cargo/compare/v0.3.15...v0.3.16
 [0.3.15]: https://github.com/tmolteno/dde-cargo/compare/v0.3.14...v0.3.15
