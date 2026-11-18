@@ -10,6 +10,37 @@ DDFacet's `CHANGES.md` and commit history, killMS's commit history, and
 
 ## [Unreleased]
 
+## [0.3.20] - 2026-11-18
+
+### Container images
+
+- DDFacet `ghcr.io/tmolteno/ddfacet:v0.16.19` → `v0.16.19`.
+- killMS `ghcr.io/tmolteno/killms:v3.15.23` → `v3.15.24`.
+- Image pins are those of the cabs synced from meerkat_imaging, equal to the latest upstream tags.
+
+### DDFacet
+
+- Unchanged at `v0.16.19`.
+
+### killMS
+
+#### `v3.15.24` (2026-11-18)
+- solver: dispatch the chansols of one LMIter as one batch, 9 barriers per interval instead of 180 (#54 item 1) (`07a66fc`)
+- staging: one gather per interval cut, GlobalDataRms and chunk-load flag counts in fewer passes (#54 items 2, 4); bit-identical, KILLMS_STAGING_LEGACY=1 restores the old code (`83758a1`)
+- TestStallWatchdog: the collector loop's bound is NTasksBatch now (#54) (`bc01a2b`)
+
+### Cab changes (meerkat_imaging)
+
+meerkat_imaging `6423a22` → `0d8deae`:
+
+- Image pin updates only.
+
+### Packaging
+
+- Package version bumped from `0.3.19` to `0.3.20`.
+- Cabs and schemas synced from `meerkat_imaging/cabs` (`invoke sync`).
+- Changelog generated from the `../DDFacet` and `../killMS` commit history and meerkat_imaging's cab history.
+
 ## [0.3.19] - 2026-11-18
 
 ### Container images
@@ -959,7 +990,8 @@ meerkat_imaging `529047a` → `76ccf43`:
   plus the `ddfacet-memory-plan` and `killms-memory-plan` cabs.
 - PyPI trusted publishing (OIDC) on `vX.Y.Z` tags.
 
-[Unreleased]: https://github.com/tmolteno/dde-cargo/compare/v0.3.19...HEAD
+[Unreleased]: https://github.com/tmolteno/dde-cargo/compare/v0.3.20...HEAD
+[0.3.20]: https://github.com/tmolteno/dde-cargo/compare/v0.3.19...v0.3.20
 [0.3.19]: https://github.com/tmolteno/dde-cargo/compare/v0.3.18...v0.3.19
 [0.3.18]: https://github.com/tmolteno/dde-cargo/compare/v0.3.17...v0.3.18
 [0.3.17]: https://github.com/tmolteno/dde-cargo/compare/v0.3.16...v0.3.17
