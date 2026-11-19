@@ -1,9 +1,9 @@
 {
-  "meerkat_imaging_commit": "b58899cb1a69f7b7e84ac2b31b919ea1e8adc462",
+  "meerkat_imaging_commit": "6b4ec6b5b645b3835025e5c11634352297ca81d4",
   "files": {
-    "ddfacet.yml": "2d8a3068df3160bbbbb91979021a8d45cfe69bae9451388b2c9fe1ff4a274154",
-    "ddfacet-memory-plan.yml": "2d34076ce532aaf07a1eb1c9ffb45a5048e23c9f4953e2ac5922f0ff80f47d31",
-    "killms-memory-plan.yml": "cc8f0b34998a3eb38a2793e443cde40de8823f7af7e947c102ee89c3582e8c5d",
+    "ddfacet.yml": "1e675727678d6e944f2a35d7b666aca2585a7f95615150a5529561c4a5874bc1",
+    "ddfacet-memory-plan.yml": "b76fc763967d271c7c40eb0c3d46aaf7e1c7d3dd58d662500d60963f079de6db",
+    "killms-memory-plan.yml": "b161973d27b9831baddc69c9b85dbd1d57556dca1782fad23c829574ab0e5d2f",
     "ddfacet_stimela_inputs_schema.yml": "eeb1466445a002124c8afbcb16d1803dec78496d94f1629ee042a5699ce53504",
     "killms_stimela_schema.yml": "6334574119e3f20a2a60efca7a9782d5f4d37d50478031262287bc97cc65df8d",
     "pick-reference-ant.yml": "bda8d3a602e65628a405f50cbe38cdfc2c5c112073099ded847ed63353be8117"
