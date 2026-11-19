@@ -10,6 +10,37 @@ DDFacet's `CHANGES.md` and commit history, killMS's commit history, and
 
 ## [Unreleased]
 
+## [0.3.23] - 2026-11-20
+
+### Container images
+
+- DDFacet `ghcr.io/tmolteno/ddfacet:v0.16.20` → `v0.16.21`.
+- killMS `ghcr.io/tmolteno/killms:v3.15.26` → `v3.15.27`.
+- Image pins are those of the cabs synced from meerkat_imaging, equal to the latest upstream tags.
+
+### DDFacet
+
+#### `v0.16.21` (2026-11-20)
+- Degrid batch: a ranges override and per-range telemetry (#154 item 2, phase 1) (`f8413960`)
+- Degrid batch: ranges cut at equal work, counted from the pool (#154 item 2, phase 2) (`b11d31e8`)
+
+### killMS
+
+#### `v3.15.27` (2026-11-20)
+- uv: rebuild killMS when its Rust sources or commit change (`52f0593`)
+
+### Cab changes (meerkat_imaging)
+
+meerkat_imaging `9d4c9fb` → `b58899c`:
+
+- Image pin updates only.
+
+### Packaging
+
+- Package version bumped from `0.3.22` to `0.3.23`.
+- Cabs and schemas synced from `meerkat_imaging/cabs` (`invoke sync`).
+- Changelog generated from the `../DDFacet` and `../killMS` commit history and meerkat_imaging's cab history.
+
 ## [0.3.22] - 2026-11-19
 
 ### Container images
@@ -1051,7 +1082,8 @@ meerkat_imaging `529047a` → `76ccf43`:
   plus the `ddfacet-memory-plan` and `killms-memory-plan` cabs.
 - PyPI trusted publishing (OIDC) on `vX.Y.Z` tags.
 
-[Unreleased]: https://github.com/tmolteno/dde-cargo/compare/v0.3.22...HEAD
+[Unreleased]: https://github.com/tmolteno/dde-cargo/compare/v0.3.23...HEAD
+[0.3.23]: https://github.com/tmolteno/dde-cargo/compare/v0.3.22...v0.3.23
 [0.3.22]: https://github.com/tmolteno/dde-cargo/compare/v0.3.21...v0.3.22
 [0.3.21]: https://github.com/tmolteno/dde-cargo/compare/v0.3.20...v0.3.21
 [0.3.20]: https://github.com/tmolteno/dde-cargo/compare/v0.3.19...v0.3.20
