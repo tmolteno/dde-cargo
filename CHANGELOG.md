@@ -10,6 +10,53 @@ DDFacet's `CHANGES.md` and commit history, killMS's commit history, and
 
 ## [Unreleased]
 
+## [0.3.25] - 2026-11-21
+
+### Container images
+
+- DDFacet `ghcr.io/tmolteno/ddfacet:v0.16.22` → `v0.16.23`.
+- killMS `ghcr.io/tmolteno/killms:v3.15.28` → `v3.15.29`.
+- Image pins are those of the cabs synced from meerkat_imaging, equal to the latest upstream tags.
+
+### DDFacet
+
+#### `v0.16.23` (2026-11-21)
+- pyFFT2Batch: detach the GIL around the batched FFT (#153) (`4a38f828`)
+- pyFFT2Batch: release the GIL and take an optional nthreads (#153) (`6229be5d`)
+- TestPyFFT2Batch: warm up before the GIL probe, fix the control and the fake-module expectation (`f083b3ca`)
+- CHANGES: drop the extra heading under Unreleased (invoke bump adds the release heading) (`476d00fa`)
+- Smooth-beam stack: a native row-sum kernel for the collapsed beam, bit-identical to numpy (#153) (`4cf3c8ac`)
+- CHANGES: the smooth-beam stack kernel (#153) (`3b20c2fe`)
+- Start a chunk's grid region without waiting for its smooth-beam stack (#153) (`a1adc316`)
+- tools/measure153: per-facet model cut + FFT timing harness (#153 item 3, phase 1) (`b86ce178`)
+- Degrid build: model cut + FFT as one GIL-free native call per facet (#153 item 3) (`83ffb353`)
+- tools/measure153: imaging-weights phase harness (#153 item 4, phase 1) (`e4e1a775`)
+- Imaging weights: accumulate and finalize as one native call per chunk (#153 item 4) (`1cd7b6ba`)
+- tools/measure153: io-lane post-processing harness (#153 item 5, phase 1) (`1128f5d8`)
+- io lane: flag/NaN pass, zero_flag pass and unique times as GIL-free native calls (#153 item 5) (`e9e251ee`)
+- tools/measure153: bench_stitch.py, the per-cycle facet loops (mean residuals, stitch) at production shapes (#153 item 8 phase 1) (`df07229a`)
+- facet mean residuals and the facet stitch as native calls with the GIL released (#153 item 8) (`f8121dab`)
+- stitch kernels: clippy fixes (#153 item 8) (`b2f487c2`)
+
+### killMS
+
+#### `v3.15.29` (2026-11-21)
+- TestFullPolSolve: end-to-end IDiag and IFull solves on a full-Jones fixture (#56) (`91b7fed`)
+- Serial solver: compare to None with is not None (#60); test --Parallel=0 IDiag and IFull (`3b021bf`)
+- Serial solver: reduce P and Q to their diagonals after every LMIter, as the in-process loop does (#60); serial IFull now recovers the planted gains (`3abe13a`)
+
+### Cab changes (meerkat_imaging)
+
+meerkat_imaging `6b4ec6b` → `e7af2a6`:
+
+- Image pin updates only.
+
+### Packaging
+
+- Package version bumped from `0.3.24` to `0.3.25`.
+- Cabs and schemas synced from `meerkat_imaging/cabs` (`invoke sync`).
+- Changelog generated from the `../DDFacet` and `../killMS` commit history and meerkat_imaging's cab history.
+
 ## [0.3.24] - 2026-11-20
 
 ### Container images
@@ -1113,7 +1160,8 @@ meerkat_imaging `529047a` → `76ccf43`:
   plus the `ddfacet-memory-plan` and `killms-memory-plan` cabs.
 - PyPI trusted publishing (OIDC) on `vX.Y.Z` tags.
 
-[Unreleased]: https://github.com/tmolteno/dde-cargo/compare/v0.3.24...HEAD
+[Unreleased]: https://github.com/tmolteno/dde-cargo/compare/v0.3.25...HEAD
+[0.3.25]: https://github.com/tmolteno/dde-cargo/compare/v0.3.24...v0.3.25
 [0.3.24]: https://github.com/tmolteno/dde-cargo/compare/v0.3.23...v0.3.24
 [0.3.23]: https://github.com/tmolteno/dde-cargo/compare/v0.3.22...v0.3.23
 [0.3.22]: https://github.com/tmolteno/dde-cargo/compare/v0.3.21...v0.3.22
