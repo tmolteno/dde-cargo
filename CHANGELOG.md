@@ -10,6 +10,40 @@ DDFacet's `CHANGES.md` and commit history, killMS's commit history, and
 
 ## [Unreleased]
 
+## [0.3.26] - 2026-11-24
+
+### Container images
+
+- DDFacet `ghcr.io/tmolteno/ddfacet:v0.16.23` → `v0.16.23`.
+- killMS `ghcr.io/tmolteno/killms:v3.15.29` → `v3.15.30`.
+- Image pins are those of the cabs synced from meerkat_imaging, equal to the latest upstream tags.
+
+### DDFacet
+
+- Unchanged at `v0.16.23`.
+
+### killMS
+
+#### `v3.15.30` (2026-11-24)
+- IDiag KAFCA step is native and GIL-free: fused task, EKF-only call, tests (#56, step 4) (`7cde26e`)
+- CHANGELOG: the native IDiag KAFCA step (#56, step 4) (`915f1ce`)
+- IFull KAFCA step is native and GIL-free: fused task, EKF-only call, block evolve, tests (#56, step 5) (`cbfbeba`)
+- CHANGELOG: the native IFull KAFCA step (#56, step 5) (`4a3c4d8`)
+- IFull: R_flat, Rinv_flat and Weights_flat are laid out like data_flat, so each sample takes its own cell's weight (#64) (`bcb1ec5`)
+- CHANGELOG: the IFull weight layout fix (#64) (`34f386b`)
+
+### Cab changes (meerkat_imaging)
+
+meerkat_imaging `e7af2a6` → `0afeaca`:
+
+- Image pin updates only.
+
+### Packaging
+
+- Package version bumped from `0.3.25` to `0.3.26`.
+- Cabs and schemas synced from `meerkat_imaging/cabs` (`invoke sync`).
+- Changelog generated from the `../DDFacet` and `../killMS` commit history and meerkat_imaging's cab history.
+
 ## [0.3.25] - 2026-11-21
 
 ### Container images
@@ -1160,7 +1194,8 @@ meerkat_imaging `529047a` → `76ccf43`:
   plus the `ddfacet-memory-plan` and `killms-memory-plan` cabs.
 - PyPI trusted publishing (OIDC) on `vX.Y.Z` tags.
 
-[Unreleased]: https://github.com/tmolteno/dde-cargo/compare/v0.3.25...HEAD
+[Unreleased]: https://github.com/tmolteno/dde-cargo/compare/v0.3.26...HEAD
+[0.3.26]: https://github.com/tmolteno/dde-cargo/compare/v0.3.25...v0.3.26
 [0.3.25]: https://github.com/tmolteno/dde-cargo/compare/v0.3.24...v0.3.25
 [0.3.24]: https://github.com/tmolteno/dde-cargo/compare/v0.3.23...v0.3.24
 [0.3.23]: https://github.com/tmolteno/dde-cargo/compare/v0.3.22...v0.3.23
