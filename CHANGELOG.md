@@ -10,6 +10,46 @@ DDFacet's `CHANGES.md` and commit history, killMS's commit history, and
 
 ## [Unreleased]
 
+## [0.3.27] - 2026-11-24
+
+### Container images
+
+- DDFacet `ghcr.io/tmolteno/ddfacet:v0.16.23` → `v0.16.24`.
+- killMS `ghcr.io/tmolteno/killms:v3.15.30` → `v3.15.31`.
+- Image pins are those of the cabs synced from meerkat_imaging, equal to the latest upstream tags.
+
+### DDFacet
+
+#### `v0.16.24` (2026-11-24)
+- ssd: a NaN fitness in the Python SSD fitness is -inf, not a NameError (#169) (`8ec13d2c`)
+- gridder: evaluate the decorrelation factor at the BDA block's mean frequency, as the degridder does (#171) (`1e6d6fec`)
+- Smooth beam: weight the stack by W*D^2 like the gridder's Jones norm (#172) (`684a85f7`)
+- GiveBeam: evaluate only the killMS beam intervals the chunk uses (#173) (`4f9082a4`)
+- GiveBeam: a chunk the solution file's BeamTimes do not cover samples the beam with DtBeamMin, not interval 0 (#180) (`b2d30166`)
+- GiveBeam guard: rows within one end-interval width of the BeamTimes table are clamped to the end interval, not a reason to fall back (#180) (`1bbb7b66`)
+- Cache keys: BDA mapping keyed on the field of view, killMS Jones on the solution files, BeamTimes_kMS stored with the Jones (`0cdbc8b4`)
+- CHANGES: cache keys (#175) (`515760a6`)
+- Keep the killMS Jones key's Facets section going through cache_key_section(self.GD, ...) (`ae68fcab`)
+- JonesNorm_Beam key: add the solution files' stamps when there are killMS solutions (`7966da5f`)
+- TestCacheKeys175: the old beam key strips the scheduling-only Facets options (`b9548524`)
+
+### killMS
+
+#### `v3.15.31` (2026-11-24)
+- BeamTimes saved in a solutions file cover every data chunk, not only the last (#66) (`fda8a6e`)
+
+### Cab changes (meerkat_imaging)
+
+meerkat_imaging `0afeaca` → `f051b4b`:
+
+- Image pin updates only.
+
+### Packaging
+
+- Package version bumped from `0.3.26` to `0.3.27`.
+- Cabs and schemas synced from `meerkat_imaging/cabs` (`invoke sync`).
+- Changelog generated from the `../DDFacet` and `../killMS` commit history and meerkat_imaging's cab history.
+
 ## [0.3.26] - 2026-11-24
 
 ### Container images
@@ -1194,7 +1234,8 @@ meerkat_imaging `529047a` → `76ccf43`:
   plus the `ddfacet-memory-plan` and `killms-memory-plan` cabs.
 - PyPI trusted publishing (OIDC) on `vX.Y.Z` tags.
 
-[Unreleased]: https://github.com/tmolteno/dde-cargo/compare/v0.3.26...HEAD
+[Unreleased]: https://github.com/tmolteno/dde-cargo/compare/v0.3.27...HEAD
+[0.3.27]: https://github.com/tmolteno/dde-cargo/compare/v0.3.26...v0.3.27
 [0.3.26]: https://github.com/tmolteno/dde-cargo/compare/v0.3.25...v0.3.26
 [0.3.25]: https://github.com/tmolteno/dde-cargo/compare/v0.3.24...v0.3.25
 [0.3.24]: https://github.com/tmolteno/dde-cargo/compare/v0.3.23...v0.3.24
