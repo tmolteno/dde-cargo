@@ -10,6 +10,35 @@ DDFacet's `CHANGES.md` and commit history, killMS's commit history, and
 
 ## [Unreleased]
 
+## [0.3.28] - 2026-11-25
+
+### Container images
+
+- DDFacet `ghcr.io/tmolteno/ddfacet:v0.16.24` → `v0.16.24`.
+- killMS `ghcr.io/tmolteno/killms:v3.15.31` → `v3.15.32`.
+- Image pins are those of the cabs synced from meerkat_imaging, equal to the latest upstream tags.
+
+### DDFacet
+
+- Unchanged at `v0.16.24`.
+
+### killMS
+
+#### `v3.15.32` (2026-11-25)
+- Beam: expose RotationDirection (North2East/North2West) for FITS beams, as DDFacet's Beam-RotationDirection (`3925843`)
+
+### Cab changes (meerkat_imaging)
+
+meerkat_imaging `f051b4b` → `9b607f2`:
+
+- Image pin updates only.
+
+### Packaging
+
+- Package version bumped from `0.3.27` to `0.3.28`.
+- Cabs and schemas synced from `meerkat_imaging/cabs` (`invoke sync`).
+- Changelog generated from the `../DDFacet` and `../killMS` commit history and meerkat_imaging's cab history.
+
 ## [0.3.27] - 2026-11-24
 
 ### Container images
@@ -1234,7 +1263,8 @@ meerkat_imaging `529047a` → `76ccf43`:
   plus the `ddfacet-memory-plan` and `killms-memory-plan` cabs.
 - PyPI trusted publishing (OIDC) on `vX.Y.Z` tags.
 
-[Unreleased]: https://github.com/tmolteno/dde-cargo/compare/v0.3.27...HEAD
+[Unreleased]: https://github.com/tmolteno/dde-cargo/compare/v0.3.28...HEAD
+[0.3.28]: https://github.com/tmolteno/dde-cargo/compare/v0.3.27...v0.3.28
 [0.3.27]: https://github.com/tmolteno/dde-cargo/compare/v0.3.26...v0.3.27
 [0.3.26]: https://github.com/tmolteno/dde-cargo/compare/v0.3.25...v0.3.26
 [0.3.25]: https://github.com/tmolteno/dde-cargo/compare/v0.3.24...v0.3.25
