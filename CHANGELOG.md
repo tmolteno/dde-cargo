@@ -10,6 +10,39 @@ DDFacet's `CHANGES.md` and commit history, killMS's commit history, and
 
 ## [Unreleased]
 
+## [0.3.29] - 2026-11-25
+
+### Container images
+
+- DDFacet `ghcr.io/tmolteno/ddfacet:v0.16.24` → `v0.16.25`.
+- killMS `ghcr.io/tmolteno/killms:v3.15.32` → `v3.15.33`.
+- Image pins are those of the cabs synced from meerkat_imaging, equal to the latest upstream tags.
+
+### DDFacet
+
+#### `v0.16.25` (2026-11-25)
+- readWeights: flag autocorrelations so they do not enter the uv-density statistics (#174) (`5f919e6d`)
+- TestPutVisColumn: give the readWeights stubs ANTENNA1/ANTENNA2 (#174) (`9861e12f`)
+- SSD fitness: a band with a tiny (not only zero) variance is a missing band, relative threshold (#182) (`f74118db`)
+- restored_mfs images: fill the shared float32 array in place, not rebind to the float64 sum (#176) (`389d532c`)
+
+### killMS
+
+#### `v3.15.33` (2026-11-25)
+- Rebuilt on DDFacet `v0.16.25`; no source changes.
+
+### Cab changes (meerkat_imaging)
+
+meerkat_imaging `9b607f2` → `73c10db`:
+
+- Image pin updates only.
+
+### Packaging
+
+- Package version bumped from `0.3.28` to `0.3.29`.
+- Cabs and schemas synced from `meerkat_imaging/cabs` (`invoke sync`).
+- Changelog generated from the `../DDFacet` and `../killMS` commit history and meerkat_imaging's cab history.
+
 ## [0.3.28] - 2026-11-25
 
 ### Container images
@@ -1263,7 +1296,8 @@ meerkat_imaging `529047a` → `76ccf43`:
   plus the `ddfacet-memory-plan` and `killms-memory-plan` cabs.
 - PyPI trusted publishing (OIDC) on `vX.Y.Z` tags.
 
-[Unreleased]: https://github.com/tmolteno/dde-cargo/compare/v0.3.28...HEAD
+[Unreleased]: https://github.com/tmolteno/dde-cargo/compare/v0.3.29...HEAD
+[0.3.29]: https://github.com/tmolteno/dde-cargo/compare/v0.3.28...v0.3.29
 [0.3.28]: https://github.com/tmolteno/dde-cargo/compare/v0.3.27...v0.3.28
 [0.3.27]: https://github.com/tmolteno/dde-cargo/compare/v0.3.26...v0.3.27
 [0.3.26]: https://github.com/tmolteno/dde-cargo/compare/v0.3.25...v0.3.26
