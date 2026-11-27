@@ -10,6 +10,36 @@ DDFacet's `CHANGES.md` and commit history, killMS's commit history, and
 
 ## [Unreleased]
 
+## [0.3.30] - 2026-11-28
+
+### Container images
+
+- DDFacet `ghcr.io/tmolteno/ddfacet:v0.16.25` → `v0.16.26`.
+- killMS `ghcr.io/tmolteno/killms:v3.15.33` → `v3.15.34`.
+- Image pins are those of the cabs synced from meerkat_imaging, equal to the latest upstream tags.
+
+### DDFacet
+
+#### `v0.16.26` (2026-11-27)
+- image: patch PyBDSF's fit_island edge lookup (IndexError on an island-edge centroid) (#187) (`7023f20a`)
+
+### killMS
+
+#### `v3.15.34` (2026-11-27)
+- Rebuilt on DDFacet `v0.16.26`; no source changes.
+
+### Cab changes (meerkat_imaging)
+
+meerkat_imaging `73c10db` → `f313720`:
+
+- Image pin updates only.
+
+### Packaging
+
+- Package version bumped from `0.3.29` to `0.3.30`.
+- Cabs and schemas synced from `meerkat_imaging/cabs` (`invoke sync`).
+- Changelog generated from the `../DDFacet` and `../killMS` commit history and meerkat_imaging's cab history.
+
 ## [0.3.29] - 2026-11-25
 
 ### Container images
@@ -1296,7 +1326,8 @@ meerkat_imaging `529047a` → `76ccf43`:
   plus the `ddfacet-memory-plan` and `killms-memory-plan` cabs.
 - PyPI trusted publishing (OIDC) on `vX.Y.Z` tags.
 
-[Unreleased]: https://github.com/tmolteno/dde-cargo/compare/v0.3.29...HEAD
+[Unreleased]: https://github.com/tmolteno/dde-cargo/compare/v0.3.30...HEAD
+[0.3.30]: https://github.com/tmolteno/dde-cargo/compare/v0.3.29...v0.3.30
 [0.3.29]: https://github.com/tmolteno/dde-cargo/compare/v0.3.28...v0.3.29
 [0.3.28]: https://github.com/tmolteno/dde-cargo/compare/v0.3.27...v0.3.28
 [0.3.27]: https://github.com/tmolteno/dde-cargo/compare/v0.3.26...v0.3.27
